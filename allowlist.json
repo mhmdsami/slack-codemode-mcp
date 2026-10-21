@@ -1,0 +1,26 @@
+{
+  "methods": [
+    "auth.test",
+    "chat.postMessage",
+    "chat.update",
+    "chat.getPermalink",
+    "search.messages",
+    "conversations.list",
+    "conversations.info",
+    "conversations.history",
+    "conversations.replies",
+    "users.info",
+    "users.list",
+    "usergroups.list",
+    "canvases.create",
+    "canvases.edit",
+    "canvases.sections.lookup",
+    "conversations.open",
+    "users.lookupByEmail",
+    "assistant.search.context",
+    "files.getUploadURLExternal",
+    "files.completeUploadExternal",
+    "canvases.getContent",
+    "files.info"
+  ]
+}
