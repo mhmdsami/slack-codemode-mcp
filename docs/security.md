@@ -9,6 +9,21 @@
 
 ## Trust boundaries
 
+```mermaid
+flowchart LR
+  Guest["Guest isolate<br/>untrusted generated code"] -->|SLACK binding| Celld["celld<br/>partial trust · no credentials"]
+  Celld -->|authenticated loopback| Host["Host<br/>trusted · token · allowlist"]
+  Host -->|HTTPS| Slack[("Slack API")]
+  Slack -.->|data, not instructions| Host
+
+  classDef trusted fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+  classDef partial fill:#fff8e1,stroke:#f9a825,color:#795548
+  classDef untrusted fill:#ffebee,stroke:#c62828,color:#b71c1c
+  class Host trusted
+  class Celld partial
+  class Guest untrusted
+```
+
 | Boundary | Trusted | Untrusted |
 |---|---|---|
 | Host process | yes | — |

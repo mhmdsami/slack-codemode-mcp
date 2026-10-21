@@ -146,17 +146,47 @@ See [docs/actions.md](docs/actions.md) for the full surface and examples.
 
 ## Security model
 
-```
-MCP client
-  execute(code)
-    └─ host: allowlist, token, Slack HTTP
-         └─ celld: globalOutbound null
-              └─ fresh isolate: slack/app/api, no token, no fs
-                   └─ service binding → trusted worker
-                        └─ authenticated loopback bridge
+```mermaid
+flowchart TB
+  Client["MCP client<br/>agent or harness"]
+
+  subgraph Host["Host process — trusted"]
+    Server["MCP server<br/>search · execute"]
+    Bridge["Loopback bridge<br/>per-execution token"]
+    Actions["Actions + allowlist"]
+    SlackClient["Slack client<br/>access + refresh tokens"]
+  end
+
+  subgraph Celld["celld process — no Slack credentials"]
+    Worker["Trusted worker<br/>runtime secret · loader"]
+    subgraph Guest["Fresh V8 isolate — untrusted"]
+      Shim["guest.js<br/>slack · api · app · console"]
+    end
+  end
+
+  API[("Slack API")]
+
+  Client -->|stdio| Server
+  Server -->|code + execution id| Worker
+  Worker -->|loads| Shim
+  Shim -->|SLACK binding| Worker
+  Worker -->|authenticated /call| Bridge
+  Bridge --> Actions
+  Actions --> SlackClient
+  SlackClient -->|HTTPS| API
+  API -.->|data, never instructions| SlackClient
+
+  classDef trusted fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+  classDef partial fill:#fff8e1,stroke:#f9a825,color:#795548
+  classDef untrusted fill:#ffebee,stroke:#c62828,color:#b71c1c
+  classDef external fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+  class Server,Bridge,Actions,SlackClient trusted
+  class Worker partial
+  class Shim,Client untrusted
+  class API external
 ```
 
-The host holds the token and the allowlist. The isolate has no network, no filesystem, and no credential. Each execution gets a random id and bridge token. See [docs/security.md](docs/security.md) for the threat model and [docs/architecture.md](docs/architecture.md) for the request flow.
+The host holds the token and the allowlist. celld holds no Slack credentials. The isolate has no network, no filesystem, and no token. Each execution gets a random id and bridge token. See [docs/security.md](docs/security.md) for the threat model and [docs/architecture.md](docs/architecture.md) for the request flow.
 
 ## Development
 

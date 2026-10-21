@@ -49,10 +49,25 @@ canvases:read        canvases:write
 SLACK_CLIENT_ID=... npm run auth
 ```
 
-1. Builds `https://slack.com/oauth/v2/authorize` with `user_scope`, `state`, `code_challenge`, and `code_challenge_method=S256`.
-2. Starts a loopback listener on port 33417.
-3. Validates `state` and exchanges the code at `oauth.v2.access` with `code_verifier` and no `client_secret`.
-4. Calls `auth.test` and stores the token.
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant A as scripts/auth.mjs
+  participant L as Loopback :33417
+  participant S as Slack
+
+  U->>A: npm run auth
+  A->>L: start callback listener
+  A->>U: open authorize URL
+  U->>S: authorize + PKCE challenge
+  S->>L: redirect with code + state
+  L->>A: validate state
+  A->>S: oauth.v2.access (code + verifier)
+  S-->>A: access, refresh, expiry
+  A->>S: auth.test
+  A->>A: store token bundle
+```
 
 `--dry-run` prints the URL and exits. `--no-open` prints it without launching a browser. `SLACK_OAUTH_PORT` overrides the callback port.
 
@@ -90,6 +105,18 @@ SLACK_CLIENT_ID=...
 Then `npm run auth`, `npm run doctor`, and register the MCP. Nothing sensitive is shared.
 
 ## Token rotation
+
+```mermaid
+flowchart LR
+  Sources["Token sources<br/>env · command · Keychain · 0600 file"] --> Resolve["resolveCredentials"]
+  Resolve --> Expiring{"refresh token<br/>and expires in under 60s?"}
+  Expiring -->|no| Call["Slack API call"]
+  Expiring -->|yes| Refresh["oauth.v2.access<br/>refresh_token"]
+  Refresh --> Store["store bundle atomically"]
+  Store --> Call
+  Call -->|token_expired / invalid_auth| Refresh
+  Refresh -->|invalid_refresh_token| Auth["npm run auth"]
+```
 
 When the app has rotation enabled, Slack returns an access token, a refresh token, and an expiry. All three are stored together, plus the Client ID.
 

@@ -1,33 +1,15 @@
 # Architecture
 
-```
-MCP client
-  execute(code)
-    │
-    ▼
-src/server.mjs                  MCP tools, runtime supervision
-    │
-    ▼
-celld dev --no-watch            one process per MCP server instance
-    │
-    ▼
-celld/worker.js                 trusted worker
-    │  env.LOADER.load
-    ▼
-fresh guest isolate             globalOutbound: null
-    │  slack.*, app.*, api.call
-    ▼
-service binding                 Bridge
-    │  POST 127.0.0.1:<port>/call
-    │  x-slack-execution-id, x-slack-bridge-token
-    ▼
-src/runtime/bridge.mjs          authenticated dispatcher
-    │  allowlist, actions, cache
-    ▼
-src/slack/client.mjs            retries, JSON/form encoding
-    │
-    ▼
-https://slack.com/api/<method>
+```mermaid
+flowchart TB
+  Client["MCP client"] -->|stdio| Server["src/server.mjs<br/>MCP tools · runtime supervision"]
+  Server -->|spawns| Celld["celld dev --no-watch<br/>one process per server"]
+  Celld --> Worker["celld/worker.js<br/>trusted worker"]
+  Worker -->|env.LOADER.load| Guest["fresh guest isolate<br/>globalOutbound: null"]
+  Guest -->|slack.* · app.* · api.call| Binding["SLACK service binding"]
+  Binding -->|POST 127.0.0.1:PORT/call| Bridge["src/runtime/bridge.mjs<br/>authenticated dispatcher"]
+  Bridge -->|allowlist · actions · cache| SlackClient["src/slack/client.mjs<br/>retries · encoding"]
+  SlackClient -->|HTTPS| API[("Slack API")]
 ```
 
 ## Modules
@@ -51,16 +33,33 @@ https://slack.com/api/<method>
 
 ## Execution lifecycle
 
-1. The MCP server lazily starts `celld dev` and waits for `/.well-known/celld/health`.
-2. `execute` generates an execution id and a 32-byte bridge token.
-3. The host posts `{ code, executionId, bridgeUrl, bridgeToken, executionMs, hostCalls }` to celld's `/execute`.
-4. The trusted worker validates the runtime secret and the request shape, then calls `env.LOADER.load` with the guest module, a `SLACK` service binding, `globalOutbound: null`, and `limits: { cpuMs, subRequests }`.
-5. The guest runs the code as an async function with `slack`, `api`, `app`, and a capturing `console`.
-6. Each Slack call becomes a service-binding request to `Bridge`, which forwards it to the host with the execution id and bridge token.
-7. The host checks the allowlist (for raw methods), runs the action or Slack call, and returns `{ ok, value }` or `{ ok: false, error }`.
-8. The guest returns `{ ok, value, logs }`; the worker disposes the isolate and forwards the response.
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as MCP client
+  participant H as Host
+  participant W as celld worker
+  participant G as Guest isolate
+  participant B as Loopback bridge
+  participant S as Slack API
 
-The execution record is removed in a `finally`, so a late or forged bridge request cannot reuse it.
+  C->>H: execute(code, timeout_ms)
+  H->>H: create execution id + bridge token
+  H->>W: POST /execute
+  W->>G: LOADER.load(guest, SLACK binding)
+  G->>W: slack.* / app.* call
+  W->>B: POST /call (id, token)
+  B->>B: allowlist + action
+  B->>S: Web API request
+  S-->>B: response
+  B-->>W: { ok, value }
+  W-->>G: result
+  G-->>W: { ok, value, logs }
+  W-->>H: response
+  H-->>C: formatted text
+```
+
+The host posts `{ code, executionId, bridgeUrl, bridgeToken, executionMs, hostCalls }`. The worker validates the runtime secret and request shape, then loads the isolate with `globalOutbound: null` and `limits: { cpuMs, subRequests }`. The execution record is removed in a `finally`, so a late or forged bridge request cannot reuse it.
 
 ## Caching
 
