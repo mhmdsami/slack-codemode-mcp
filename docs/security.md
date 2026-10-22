@@ -69,7 +69,7 @@ Execution has a wall deadline and a CPU budget. celld enforces `cpuMs`, and the 
 
 ## Credentials
 
-- Token: `SLACK_USER_TOKEN`, `SLACK_TOKEN_CMD`, macOS Keychain, or a 0600 file. Token bundles are written atomically and never passed through command-line arguments.
+- Token: `SLACK_USER_TOKEN`, `SLACK_TOKEN_CMD`, or a 0600 file. Token bundles are written atomically and never passed through command-line arguments. macOS Keychain is read only for a legacy raw token.
 - App client id: `.env`, public by design.
 - No client secret exists in the PKCE flow.
 - celld's environment contains no Slack credentials.

@@ -17,7 +17,6 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const SERVICE = 'slack-codemode-mcp';
-const LABEL = 'Slack Codemode MCP Token';
 const CONFIG_DIR = join(homedir(), '.config', 'slack-codemode');
 const TOKEN_FILE = join(CONFIG_DIR, 'token');
 const LOCK_FILE = join(CONFIG_DIR, 'refresh.lock');
@@ -47,12 +46,13 @@ function shell(command, options = {}) {
   return spawnSync(command, { shell: true, encoding: 'utf8', ...options });
 }
 
-function parseStored(value) {
+export function parseStored(value) {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value);
     return parsed && typeof parsed.accessToken === 'string' ? parsed : null;
   } catch {
+    if (value.startsWith('{') || value.startsWith('[')) return null;
     return { accessToken: value, refreshToken: null, expiresAt: null, clientId: null };
   }
 }
@@ -66,9 +66,9 @@ function keychainValue() {
 }
 
 export function readStoredCredentials() {
+  if (existsSync(TOKEN_FILE)) return parseStored(readFileSync(TOKEN_FILE, 'utf8').trim());
   const fromKeychain = keychainValue();
   if (fromKeychain) return parseStored(fromKeychain);
-  if (existsSync(TOKEN_FILE)) return parseStored(readFileSync(TOKEN_FILE, 'utf8').trim());
   return null;
 }
 
@@ -103,9 +103,6 @@ export function resolveToken({ required = false } = {}) {
       '  SLACK_USER_TOKEN=<token>',
       '  SLACK_TOKEN_CMD="op read op://Private/slack-codemode/token"',
       `  a file at ${TOKEN_FILE} (mode 0600)`,
-      process.platform === 'darwin'
-        ? '  the macOS Keychain: security add-generic-password -s slack-codemode-mcp -a "$USER" -w'
-        : '',
     ]
       .filter(Boolean)
       .join('\n'),
@@ -123,33 +120,19 @@ export function storeCredentials(credentials) {
     return 'SLACK_TOKEN_STORE_CMD';
   }
 
-  if (process.platform === 'darwin') {
-    const result = spawnSync(
-      'security',
-      [
-        'add-generic-password',
-        '-U',
-        '-s',
-        SERVICE,
-        '-a',
-        process.env.USER ?? 'user',
-        '-l',
-        LABEL,
-        '-w',
-      ],
-      { encoding: 'utf8', input: `${serialized}\n${serialized}\n` },
-    );
-    if (result.status !== 0) {
-      throw new Error(`could not write the Keychain item: ${(result.stderr || '').trim()}`);
-    }
-    return 'macOS Keychain';
-  }
-
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   const temporary = join(CONFIG_DIR, `.token-${process.pid}-${Date.now()}`);
   writeFileSync(temporary, serialized, { mode: 0o600 });
   renameSync(temporary, TOKEN_FILE);
   chmodSync(TOKEN_FILE, 0o600);
+
+  if (process.platform === 'darwin') {
+    spawnSync(
+      'security',
+      ['delete-generic-password', '-s', SERVICE, '-a', process.env.USER ?? 'user'],
+      { encoding: 'utf8' },
+    );
+  }
   return TOKEN_FILE;
 }
 

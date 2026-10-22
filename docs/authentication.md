@@ -77,14 +77,14 @@ Resolution order:
 
 1. `SLACK_USER_TOKEN`
 2. `SLACK_TOKEN_CMD` (prints the token)
-3. macOS Keychain (`Slack Codemode MCP Token`)
-4. `~/.config/slack-codemode/token` (mode 0600, non-macOS)
+3. `~/.config/slack-codemode/token` (mode 0600)
+4. macOS Keychain, for a legacy raw token only
 
 Storage on success:
 
-- macOS: Keychain
-- Linux: the 0600 file
-- Any platform: `SLACK_TOKEN_STORE_CMD` receives the token on stdin
+- The token bundle is written atomically to `~/.config/slack-codemode/token` with mode 0600.
+- Any platform: `SLACK_TOKEN_STORE_CMD` receives the token on stdin instead.
+- On macOS, `security add-generic-password -w` truncates stdin at 128 bytes, which is too small for an access plus refresh token bundle. The file avoids that limit and keeps secrets out of command-line arguments.
 
 ## Verification
 
@@ -108,7 +108,7 @@ Then `npm run auth`, `npm run doctor`, and register the MCP. Nothing sensitive i
 
 ```mermaid
 flowchart LR
-  Sources["Token sources<br/>env · command · Keychain · 0600 file"] --> Resolve["resolveCredentials"]
+  Sources["Token sources<br/>env · command · 0600 file · legacy Keychain"] --> Resolve["resolveCredentials"]
   Resolve --> Expiring{"refresh token<br/>and expires in under 60s?"}
   Expiring -->|no| Call["Slack API call"]
   Expiring -->|yes| Refresh["oauth.v2.access<br/>refresh_token"]

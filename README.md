@@ -56,7 +56,7 @@ $EDITOR .env
 npm run auth
 ```
 
-This opens Slack, completes the PKCE exchange, and stores the token bundle in the macOS Keychain or `~/.config/slack-codemode/token` on Linux. Rotating tokens refresh automatically.
+This opens Slack, completes the PKCE exchange, and stores the token bundle in `~/.config/slack-codemode/token` with mode 0600. Rotating tokens refresh automatically.
 
 ```bash
 npm run doctor
