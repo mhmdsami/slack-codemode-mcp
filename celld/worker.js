@@ -151,25 +151,15 @@ export class Bridge extends WorkerEntrypoint {
         error: { code: 'invalid_input', message: 'Bridge request is not valid JSON' },
       });
     }
-    const isMethod =
-      isExactObject(payload, ['method', 'args']) &&
-      typeof payload.method === 'string' &&
-      payload.method.length > 0 &&
-      payload.method.length <= 128;
-    const isAction =
-      isExactObject(payload, ['action', 'input']) &&
-      typeof payload.action === 'string' &&
-      payload.action.length > 0 &&
-      payload.action.length <= 64;
-    if (!isMethod && !isAction) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       return jsonResponse(400, {
         ok: false,
         error: { code: 'invalid_input', message: 'Bridge request shape is invalid' },
       });
     }
     const body = JSON.stringify({
-      executionId: this.ctx.props.executionId,
       ...payload,
+      executionId: this.ctx.props.executionId,
     });
     let response;
     try {
@@ -269,7 +259,7 @@ export default {
       body.executionMs > 120_000 ||
       !Number.isInteger(body.hostCalls) ||
       body.hostCalls < 1 ||
-      body.hostCalls > 256
+      body.hostCalls > 64
     ) {
       return jsonResponse(400, {
         ok: false,

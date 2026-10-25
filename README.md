@@ -1,16 +1,20 @@
 # Slack Code Mode MCP
 
-A Code Mode MCP server for Slack. It exposes two tools, `search` and `execute`, and runs agent-written JavaScript against the Slack Web API in a celld V8 isolate with no network access and no Slack token.
+A Code Mode MCP server for Slack. It gives the model two tools, `search` and `execute`, and runs agent-written JavaScript against the Slack Web API in a sandbox.
+
+The sandbox has no network access and no Slack token.
 
 ## Why Code Mode
 
-`search` returns TypeScript signatures from the Slack SDK, so the agent calls methods with the right arguments instead of guessing them. One execution can chain several calls, such as resolving a user, reading a thread, posting a reply, and editing a canvas, without sending intermediate results back through the model.
+`search` returns TypeScript signatures from the Slack SDK, so the agent calls methods with the right arguments instead of guessing.
 
-The guest isolate never receives the Slack token. Calls go through a service binding to the host, which holds the credential and enforces the allowlist. The isolate has `globalOutbound: null`, so `fetch()` throws.
+`execute` can chain several calls in one go. For example: find a user, read a thread, reply, and update a canvas. The intermediate results never go back through the model, which keeps the conversation small.
+
+The guest isolate never sees the Slack token. Calls go through a service binding to the host, which holds the credential and enforces the allowlist. The isolate has no outbound access, so `fetch()` throws.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.12 or newer
 - [celld](https://github.com/denoland/celld) v0.6.2 on `PATH` (macOS arm64 and Linux; Windows is not supported)
 - A Slack internal app with PKCE enabled
 
@@ -22,24 +26,30 @@ cd slack-codemode-mcp
 npm ci
 ```
 
-Celld is a separate binary. Put it on `PATH`, or point the server at it with `SLACK_CODEMODE_CELLD_BIN`.
+celld is a separate binary. Put it on `PATH`, or point the server at it:
 
 ```bash
 celld --version
 ```
 
+```bash
+export SLACK_CODEMODE_CELLD_BIN="$HOME/.local/bin/celld"
+```
+
 ## Configure the Slack app
 
 1. Create an internal app at <https://api.slack.com/apps>.
-2. Open **OAuth & Permissions** and enable **PKCE**. This is one-way and makes the app a public client, so no client secret is distributed.
+2. Open **OAuth & Permissions** and enable **PKCE**.
 3. Add the redirect URL `http://localhost:33417/callback`.
-4. Add the user token scopes the server expects:
+4. Add the user token scopes the server expects.
 
 ```bash
 npm run scopes
 ```
 
-A user token attributes messages to you and keeps canvases on your account. A bot token would post as an app and only see channels the bot joined. Because the app is a public client, colleagues need only the same Client ID.
+Use a user token, not a bot token. A user token posts as you and sees your channels. A bot token only sees channels the bot joined.
+
+PKCE is one-way. It makes the app a public client, so no client secret is distributed. Colleagues only need the same Client ID.
 
 ## Add the Client ID
 
@@ -48,7 +58,13 @@ cp .env.example .env
 $EDITOR .env
 ```
 
-`.env` holds one value, `SLACK_CLIENT_ID`. It is gitignored.
+`.env` holds one value:
+
+```bash
+SLACK_CLIENT_ID=...
+```
+
+The file is gitignored.
 
 ## Authenticate
 
@@ -57,6 +73,8 @@ npm run auth
 ```
 
 This opens Slack, completes the PKCE exchange, and stores the token bundle in `~/.config/slack-codemode/token` with mode 0600. Rotating tokens refresh automatically.
+
+Check the token and scopes:
 
 ```bash
 npm run doctor
@@ -70,11 +88,11 @@ Pick your harness.
 
 ### Claude Code
 
-Claude Code needs `--scope user` to make the server global. Without it, the entry is tied to the current directory.
-
 ```bash
 claude mcp add --scope user slack-codemode-mcp -- node "$PWD/mcp/server.mjs"
 ```
+
+`--scope user` makes the server global. Without it, the entry is tied to the current directory.
 
 ### Codex
 
@@ -136,11 +154,26 @@ return await app.whoami();
 | `search` | Find an allowed method by name, or fetch a TypeScript type. |
 | `execute` | Run JavaScript with `app.*`, `slack.*`, `api.call`, and `console`. |
 
-`search` covers allowlisted methods by default. Pass `include_blocked: true` to search the full index.
+`search` covers allowlisted methods by default. It also lists methods that are missing from the bundled SDK index. To search the full API, pass `include_blocked: true`. Type declarations are omitted unless `include_types: true`.
 
 ## Actions
 
-`app.*` covers lookups, DMs, posts, threads, message links, file uploads, and canvases. Actions paginate and cache in the host, not in the guest. Raw allowlisted methods remain available through `slack.*` and `api.call`.
+`app.*` is the recommended surface. It covers lookups, DMs, posts, message edits and search, threads, message links, file uploads, and canvases.
+
+Actions paginate and cache in the host, not in the guest. Raw allowlisted methods stay available through `slack.*` and `api.call`.
+
+```js
+return await app.search("deploy failed", { count: 10 });
+```
+
+```js
+await app.edit("#oncall", "1699999999.000000", "fixed the typo");
+```
+
+```js
+const { canvas_id } = await app.canvas.create("Oncall 42", "# Week 42");
+await app.canvas.share(canvas_id, { channel_ids: ["C123ABC"] });
+```
 
 See [docs/actions.md](docs/actions.md) for the full surface and examples.
 
@@ -186,7 +219,11 @@ flowchart TB
   class API external
 ```
 
-The host holds the token and the allowlist. celld holds no Slack credentials. The isolate has no network, no filesystem, and no token. Each execution gets a random id and bridge token. See [docs/security.md](docs/security.md) for the threat model and [docs/architecture.md](docs/architecture.md) for the request flow.
+The host holds the token and the allowlist. celld holds no Slack credentials. The isolate has no network, no filesystem, and no token.
+
+Each execution gets a random id and a bridge token. The bridge removes the record when the execution ends, so a late or forged call cannot reuse it.
+
+For the full threat model, see [docs/security.md](docs/security.md). For the request flow, see [docs/architecture.md](docs/architecture.md).
 
 ## Development
 
@@ -198,14 +235,16 @@ npm run doctor
 npm run generate
 ```
 
-`gate` runs Biome and the unit tests, and is what CI runs. Lefthook runs Biome and tests on commit and the full gate on push:
+`gate` runs Biome and the unit tests. CI runs the same command.
+
+Lefthook runs Biome and the tests on commit, and the full gate on push:
 
 ```bash
 npm install
 npx lefthook install
 ```
 
-CI runs the gate on Ubuntu and macOS (`.github/workflows/ci.yml`).
+CI runs the gate on Ubuntu and macOS. See [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Docs
 

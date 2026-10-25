@@ -42,8 +42,35 @@ test('does not return an unrelated RTS user', async () => {
     dms: new Map(),
     names: new Map(),
     ttlMs: 1000,
+    maxEntries: 100,
   };
 
   const users = createUserActions({ slack, cache });
   await assert.rejects(() => users.find('jane doe'), /No user matched/);
+});
+
+test('maps a missing email lookup to a not_found action error', async () => {
+  const slack = {
+    call: async () => {
+      const error = new Error('nope');
+      error.code = 'users_not_found';
+      throw error;
+    },
+  };
+  const users = createUserActions({
+    slack,
+    cache: {
+      users: null,
+      usersAt: 0,
+      dms: new Map(),
+      names: new Map(),
+      ttlMs: 1000,
+      maxEntries: 100,
+    },
+  });
+
+  await assert.rejects(
+    () => users.find('nobody@example.com'),
+    (error) => error.code === 'not_found' && /nobody@example\.com/.test(error.message),
+  );
 });

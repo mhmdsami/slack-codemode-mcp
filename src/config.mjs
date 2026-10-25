@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
+export const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+
 export const PATHS = {
   index: join(ROOT, 'api-index.json'),
   allowlist: join(ROOT, 'allowlist.json'),
@@ -24,7 +26,6 @@ export const LIMITS = {
   handlerBudgetSeconds: 130,
   heapMb: 64,
   bridgeBodyBytes: 64 * 1024,
-  executionBodyBytes: 128 * 1024,
   defaultExecutionMs: 30_000,
   maxExecutionMs: 120_000,
   hostCalls: 64,
@@ -41,7 +42,14 @@ export const LIMITS = {
     join(homedir(), '.gnupg'),
     join(homedir(), '.kube'),
     join(homedir(), '.docker'),
+    join(homedir(), '.config', 'gh'),
     join(homedir(), 'Library', 'Keychains'),
+  ],
+  sensitiveFiles: [
+    join(homedir(), '.netrc'),
+    join(homedir(), '.npmrc'),
+    join(homedir(), '.pgpass'),
+    join(homedir(), '.git-credentials'),
   ],
 };
 

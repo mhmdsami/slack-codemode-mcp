@@ -49,6 +49,33 @@ test('rejects unknown bridge tokens and methods', async () => {
     const allowedBody = await allowed.json();
     assert.equal(allowedBody.ok, true);
     assert.equal(allowedBody.value.user, 'someone');
+
+    const origin = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://evil.test',
+        'x-slack-execution-id': 'exec-1',
+        'x-slack-bridge-token': 'bridge-secret',
+      },
+      body: JSON.stringify({ executionId: 'exec-1', method: 'auth.test', args: {} }),
+    });
+    assert.equal(origin.status, 403);
+
+    const oversized = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-slack-execution-id': 'exec-1',
+        'x-slack-bridge-token': 'bridge-secret',
+      },
+      body: JSON.stringify({
+        executionId: 'exec-1',
+        method: 'auth.test',
+        args: { padding: 'x'.repeat(80 * 1024) },
+      }),
+    });
+    assert.equal(oversized.status, 413);
   } finally {
     bridge.removeExecution('exec-1');
     await bridge.close();

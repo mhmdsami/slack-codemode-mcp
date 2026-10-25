@@ -1,19 +1,23 @@
 # Authentication
 
-Slack issues user tokens through OAuth. This server uses **PKCE**, which makes the app a public client and removes the client secret entirely.
+Slack issues user tokens through OAuth. This server uses **PKCE**, which makes the app a public client and removes the client secret.
 
 ## Slack app
 
 1. Create an internal app at <https://api.slack.com/apps>.
-2. Enable **PKCE** under OAuth & Permissions. This is one-way.
+2. Open **OAuth & Permissions** and enable **PKCE**. This cannot be undone.
 3. Add the redirect URL `http://localhost:33417/callback`.
-4. Add the user token scopes below.
+4. Add the user token scopes listed below.
 
 ## Scopes
 
-The authoritative list is printed by `npm run scopes`, which reads it from `scripts/auth.mjs`.
+The authoritative list is printed by:
 
+```bash
+npm run scopes
 ```
+
+```text
 chat:write
 channels:read        channels:history
 groups:read          groups:history
@@ -40,10 +44,10 @@ canvases:read        canvases:write
 | `usergroups.list` | `usergroups:read` |
 | `files.info` | `files:read` |
 | `files.getUploadURLExternal`, `files.completeUploadExternal` | `files:write` |
-| `canvases.create`, `canvases.edit` | `canvases:write` |
-| `canvases.sections.lookup` | `canvases:read` |
+| `canvases.create`, `canvases.edit`, `canvases.access.set` | `canvases:write` |
+| `canvases.getContent`, `canvases.sections.lookup` | `canvases:read` |
 
-## Flow
+## Run the flow
 
 ```bash
 SLACK_CLIENT_ID=... npm run auth
@@ -69,40 +73,72 @@ sequenceDiagram
   A->>A: store token bundle
 ```
 
-`--dry-run` prints the URL and exits. `--no-open` prints it without launching a browser. `SLACK_OAUTH_PORT` overrides the callback port.
+Useful flags:
+
+```bash
+npm run auth -- --dry-run   # print the URL and exit
+npm run auth -- --no-open   # print the URL, do not open a browser
+```
+
+To use a different callback port:
+
+```bash
+SLACK_OAUTH_PORT=34567 npm run auth
+```
 
 ## Token storage
 
-Resolution order:
+The token is resolved in this order:
 
 1. `SLACK_USER_TOKEN`
-2. `SLACK_TOKEN_CMD` (prints the token)
-3. `~/.config/slack-codemode/token` (mode 0600)
+2. `SLACK_TOKEN_CMD`, which prints the token
+3. `~/.config/slack-codemode/token`, mode 0600
 4. macOS Keychain, for a legacy raw token only
 
-Storage on success:
+A successful login writes a bundle to:
 
-- The token bundle is written atomically to `~/.config/slack-codemode/token` with mode 0600.
-- Any platform: `SLACK_TOKEN_STORE_CMD` receives the token on stdin instead.
-- On macOS, `security add-generic-password -w` truncates stdin at 128 bytes, which is too small for an access plus refresh token bundle. The file avoids that limit and keeps secrets out of command-line arguments.
+```text
+~/.config/slack-codemode/token
+```
 
-## Verification
+The file is written atomically with mode 0600.
+
+To store the bundle somewhere else, set a command that reads it from stdin:
+
+```bash
+export SLACK_TOKEN_STORE_CMD="op item edit slack-codemode token=\$(cat)"
+```
+
+macOS Keychain is only read for a legacy raw token. Its command-line interface truncates stdin at 128 bytes, which is too small for an access token plus a refresh token.
+
+## Verify
 
 ```bash
 npm run doctor
 ```
 
-The checker probes one method per area with fixture ids. `channel_not_found`, `user_not_found`, and `canvas_not_found` count as passes: the scope worked, the fixture did not.
+The checker probes one method per area with fixture ids.
+
+`channel_not_found`, `user_not_found`, and `canvas_not_found` count as passes. The scope worked and the fixture simply does not exist.
 
 ## Colleagues
 
-Each person runs the server on their own machine with their own user token. With PKCE they need only the Client ID:
+Everyone runs the server on their own machine with their own user token.
 
-```
+With PKCE they only need the Client ID:
+
+```bash
 SLACK_CLIENT_ID=...
 ```
 
-Then `npm run auth`, `npm run doctor`, and register the MCP. Nothing sensitive is shared.
+Then run the same three steps:
+
+```bash
+npm run auth
+npm run doctor
+```
+
+Nothing sensitive is shared between machines.
 
 ## Token rotation
 
@@ -118,12 +154,24 @@ flowchart LR
   Refresh -->|invalid_refresh_token| Auth["npm run auth"]
 ```
 
-When the app has rotation enabled, Slack returns an access token, a refresh token, and an expiry. All three are stored together, plus the Client ID.
+With rotation enabled, Slack returns an access token, a refresh token, and an expiry. The server stores all three plus the Client ID.
 
-Before a call, if the access token expires within 60 seconds, the server refreshes it. If Slack answers `token_expired` or `invalid_auth`, the server refreshes once and retries the call. Refreshes time out after 20 seconds, and the lock holder re-reads the stored bundle before rotating.
+Before a call, if the access token expires within 60 seconds, the server refreshes it. If Slack answers `token_expired` or `invalid_auth`, it refreshes once and retries.
 
-A lock file at `~/.config/slack-codemode/refresh.lock` coordinates refresh across harness processes, so two MCP servers do not rotate the same refresh token at once. A process that loses the race reuses the token the winner stored.
+A refresh times out after 20 seconds. The lock holder re-reads the stored bundle before rotating.
 
-Refresh tokens expire after 30 days with PKCE. When refresh fails with `invalid_refresh_token`, run `npm run auth` again.
+A lock file coordinates refreshes across processes:
 
-`SLACK_USER_TOKEN` and `SLACK_TOKEN_CMD` supply a token without a refresh token, so they cannot renew; re-run auth when those expire.
+```text
+~/.config/slack-codemode/refresh.lock
+```
+
+Two MCP servers cannot rotate the same refresh token at once. The process that loses the race reuses the token the winner stored.
+
+Refresh tokens expire after 30 days with PKCE. When a refresh fails with `invalid_refresh_token`, log in again:
+
+```bash
+npm run auth
+```
+
+`SLACK_USER_TOKEN` and `SLACK_TOKEN_CMD` supply a token without a refresh token. They cannot renew, so log in again when they expire.

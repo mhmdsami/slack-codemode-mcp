@@ -15,6 +15,7 @@
     "canvases.create",
     "canvases.edit",
     "canvases.sections.lookup",
+    "canvases.access.set",
     "conversations.open",
     "users.lookupByEmail",
     "assistant.search.context",

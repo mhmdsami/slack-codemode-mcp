@@ -13,11 +13,11 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { LIMITS } from './config.mjs';
 
 const SERVICE = 'slack-codemode-mcp';
-const CONFIG_DIR = join(homedir(), '.config', 'slack-codemode');
+const CONFIG_DIR = LIMITS.configDir;
 const TOKEN_FILE = join(CONFIG_DIR, 'token');
 const LOCK_FILE = join(CONFIG_DIR, 'refresh.lock');
 const REFRESH_MARGIN_MS = 60_000;
@@ -29,17 +29,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function combineSignals(timeoutMs, external) {
   const timeout = AbortSignal.timeout(timeoutMs);
-  if (!external) return timeout;
-  if (AbortSignal.any) return AbortSignal.any([timeout, external]);
-  const controller = new AbortController();
-  for (const signal of [timeout, external]) {
-    if (signal.aborted) {
-      controller.abort();
-      break;
-    }
-    signal.addEventListener('abort', () => controller.abort(), { once: true });
-  }
-  return controller.signal;
+  return external ? AbortSignal.any([timeout, external]) : timeout;
 }
 
 function shell(command, options = {}) {
@@ -121,6 +111,9 @@ export function storeCredentials(credentials) {
   }
 
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(CONFIG_DIR, 0o700);
+  } catch {}
   const temporary = join(CONFIG_DIR, `.token-${process.pid}-${Date.now()}`);
   writeFileSync(temporary, serialized, { mode: 0o600 });
   renameSync(temporary, TOKEN_FILE);
@@ -138,6 +131,9 @@ export function storeCredentials(credentials) {
 
 async function acquireLock() {
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(CONFIG_DIR, 0o700);
+  } catch {}
   for (let attempt = 0; attempt < Math.ceil(LOCK_WAIT_MS / 100); attempt += 1) {
     const owner = randomBytes(16).toString('hex');
     try {
@@ -242,11 +238,6 @@ export function credentialsNeedRefresh(credentials) {
 }
 
 export function openBrowser(url) {
-  const command =
-    process.platform === 'darwin'
-      ? `open ${JSON.stringify(url)}`
-      : process.platform === 'win32'
-        ? `start "" ${JSON.stringify(url)}`
-        : `xdg-open ${JSON.stringify(url)}`;
-  return shell(command).status === 0;
+  const [command, args] = process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  return spawnSync(command, args, { stdio: 'ignore' }).status === 0;
 }

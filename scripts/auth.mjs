@@ -9,15 +9,7 @@ import { openBrowser, storeCredentials } from '../src/credentials.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_FILE = path.join(ROOT, '.env');
 if (fs.existsSync(ENV_FILE)) {
-  if (typeof process.loadEnvFile === 'function') {
-    process.loadEnvFile(ENV_FILE);
-  } else {
-    for (const line of fs.readFileSync(ENV_FILE, 'utf8').split('\n')) {
-      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-      if (match && !process.env[match[1]])
-        process.env[match[1]] = match[2].replace(/^["']|["']$/g, '');
-    }
-  }
+  process.loadEnvFile(ENV_FILE);
 }
 const REDIRECT_PORT = Number(process.env.SLACK_OAUTH_PORT ?? 33417);
 const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
@@ -291,16 +283,24 @@ function sendPage(res, status, html) {
   });
   res.end(html);
 }
+
+function stateMatches(value) {
+  if (typeof value !== 'string' || value.length !== state.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(value), Buffer.from(state));
+}
+
+let timeout;
 let result;
 try {
   result = await new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url, `http://localhost:${REDIRECT_PORT}`);
-      if (url.pathname !== '/callback') {
+      if (req.method !== 'GET' || url.pathname !== '/callback') {
         res.writeHead(404).end();
         return;
       }
       const fail = (message) => {
+        clearTimeout(timeout);
         sendPage(
           res,
           400,
@@ -315,7 +315,9 @@ try {
         reject(new Error(message));
       };
       if (url.searchParams.get('error')) return fail(url.searchParams.get('error'));
-      if (url.searchParams.get('state') !== state) return fail('state mismatch — start over');
+      if (!stateMatches(url.searchParams.get('state'))) {
+        return fail('state mismatch — start over');
+      }
       const code = url.searchParams.get('code');
       if (!code) return fail('no code in callback');
       try {
@@ -357,6 +359,7 @@ try {
           }),
         );
         server.close();
+        clearTimeout(timeout);
         resolve({
           token,
           scopes,
@@ -371,13 +374,14 @@ try {
     });
     server.on('error', reject);
     server.listen(REDIRECT_PORT, '127.0.0.1');
-    setTimeout(
+    timeout = setTimeout(
       () => {
         server.close();
         reject(new Error('timed out waiting for the callback (5 minutes)'));
       },
       5 * 60 * 1000,
-    ).unref();
+    );
+    timeout.unref();
   });
 } catch (error) {
   console.error(`Authorization failed: ${error.message}`);

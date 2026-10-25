@@ -6,15 +6,18 @@ import { executionSignal } from '../slack/client.mjs';
 async function readBody(request, maxBytes) {
   const chunks = [];
   let total = 0;
+  let tooLarge = false;
   for await (const chunk of request) {
+    if (tooLarge) continue;
     total += chunk.length;
     if (total > maxBytes) {
-      request.destroy();
-      throw new Error('body too large');
+      tooLarge = true;
+      chunks.length = 0;
+      continue;
     }
     chunks.push(chunk);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return { text: tooLarge ? '' : Buffer.concat(chunks).toString('utf8'), tooLarge };
 }
 
 function errorPayload(error) {
@@ -51,8 +54,18 @@ export function createBridge({ allowed, slack, actions }) {
       return;
     }
 
+    if (request.headers.origin !== undefined) {
+      send(403, {
+        ok: false,
+        error: { code: 'forbidden', message: 'Browser-origin requests are not allowed' },
+      });
+      return;
+    }
+
     const controller = new AbortController();
-    request.on('aborted', () => controller.abort());
+    request.on('close', () => {
+      if (!request.complete) controller.abort();
+    });
     response.on('close', () => {
       if (!response.writableEnded) controller.abort();
     });
@@ -72,7 +85,15 @@ export function createBridge({ allowed, slack, actions }) {
 
     let body;
     try {
-      body = JSON.parse(await readBody(request, LIMITS.bridgeBodyBytes));
+      const read = await readBody(request, LIMITS.bridgeBodyBytes);
+      if (read.tooLarge) {
+        send(413, {
+          ok: false,
+          error: { code: 'request_too_large', message: 'Bridge body is too large' },
+        });
+        return;
+      }
+      body = JSON.parse(read.text);
     } catch {
       send(400, { ok: false, error: { code: 'invalid_input', message: 'Invalid bridge body' } });
       return;

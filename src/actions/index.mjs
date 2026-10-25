@@ -31,6 +31,10 @@ export function createActions({ slack, cache, limits }) {
         return messages.dm(input);
       case 'post':
         return messages.post(input);
+      case 'edit':
+        return messages.edit(input);
+      case 'search':
+        return messages.search(input);
       case 'thread':
         return messages.thread(input);
       case 'readLink':
@@ -43,6 +47,8 @@ export function createActions({ slack, cache, limits }) {
         return canvas.append(input);
       case 'canvasEdit':
         return canvas.edit(input);
+      case 'canvasShare':
+        return canvas.share(input);
       case 'canvasComments':
         return canvas.comments(input);
       case 'canvasSections':
@@ -54,5 +60,5 @@ export function createActions({ slack, cache, limits }) {
     }
   }
 
-  return { run, messages, users, channels };
+  return { run };
 }

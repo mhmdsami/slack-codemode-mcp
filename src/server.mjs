@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { createActions } from './actions/index.mjs';
 import { createCache } from './cache.mjs';
-import { LIMITS, readAllowlist, readIndex } from './config.mjs';
+import { LIMITS, readAllowlist, readIndex, VERSION } from './config.mjs';
 import { resolveCredentials } from './credentials.mjs';
 import { CelldRuntime } from './runtime/celld.mjs';
 import { createSearch } from './search.mjs';
@@ -72,9 +72,18 @@ export function createRuntimeManager({ allowed, slack, actions, start = CelldRun
 }
 
 function cap(text) {
-  return text.length > LIMITS.maxResultBytes
-    ? `${text.slice(0, LIMITS.maxResultBytes)}\n...[truncated]`
-    : text;
+  if (Buffer.byteLength(text) <= LIMITS.maxResultBytes) return text;
+  const truncated = Buffer.from(text)
+    .subarray(0, LIMITS.maxResultBytes)
+    .toString('utf8')
+    .replace(/\uFFFD$/u, '');
+  return `${truncated}\n...[truncated]`;
+}
+
+function withDiagnostics(error, runtime) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const tail = runtime?.diagnostics?.() ?? '';
+  return tail ? `${detail}\n--- celld diagnostics ---\n${tail}` : detail;
 }
 
 export function formatExecution(payload) {
@@ -91,6 +100,8 @@ export function formatExecution(payload) {
   if (detail.needed) parts.push(`needed=${detail.needed}`);
   if (detail.provided) parts.push(`provided=${detail.provided}`);
   if (detail.client_msg_id) parts.push(`client_msg_id=${detail.client_msg_id}`);
+  if (detail.retry_after) parts.push(`retry_after=${detail.retry_after}`);
+  if (detail.matches) parts.push(`matches=${JSON.stringify(detail.matches)}`);
   return { isError: true, text: cap(`${prefix}${parts.join(' | ')}`) };
 }
 
@@ -123,7 +134,7 @@ export async function main() {
   process.on('exit', () => runtime.stopSync());
 
   const server = new McpServer(
-    { name: 'Slack Codemode MCP', version: '0.4.0' },
+    { name: 'Slack Codemode MCP', version: VERSION },
     { instructions: INSTRUCTIONS },
   );
 
@@ -132,7 +143,8 @@ export async function main() {
     {
       title: 'Search the Slack API surface',
       description:
-        'Find Slack Web API methods by name, description, or argument type. Searches only the methods this server allows. Returns the TypeScript signature, JSDoc, and the argument interface. Use `type` to fetch a referenced type, or `include_blocked` to search the full API.',
+        'Find Slack Web API methods by name, description, or argument type. Searches only the methods this server allows. Returns the TypeScript signature and JSDoc. Methods allowed here but missing from the bundled SDK index are listed too. Pass `include_types: true` for the argument interface. Use `type` to fetch a referenced type, or `include_blocked` to search the full API.',
+      annotations: { readOnlyHint: true, openWorldHint: false },
       inputSchema: {
         query: z
           .string()
@@ -146,7 +158,7 @@ export async function main() {
         include_types: z
           .boolean()
           .optional()
-          .describe('Include the argument interface (default true).'),
+          .describe('Include the argument interface (default false).'),
         include_blocked: z
           .boolean()
           .optional()
@@ -213,7 +225,7 @@ export async function main() {
       }
 
       return {
-        content: [{ type: 'text', text: search.render(entries, include_types ?? true) }],
+        content: [{ type: 'text', text: search.render(entries, include_types ?? false) }],
       };
     },
   );
@@ -224,6 +236,7 @@ export async function main() {
       title: 'Execute Slack API code',
       description:
         'Run JavaScript inside a network-isolated celld V8 isolate. Prefer `app.*` for lookups, DMs, posts, threads, links, files, and canvases; `slack` exposes the allowlisted Web API. Return a value to get it back; console output is included.',
+      annotations: { readOnlyHint: false, openWorldHint: true },
       inputSchema: {
         code: z
           .string()
@@ -255,7 +268,7 @@ export async function main() {
       } catch (error) {
         return {
           isError: true,
-          content: [{ type: 'text', text: `execution failed: ${error.message}` }],
+          content: [{ type: 'text', text: `execution failed: ${withDiagnostics(error, active)}` }],
         };
       }
 

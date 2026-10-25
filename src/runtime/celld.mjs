@@ -54,9 +54,8 @@ async function waitForHealth(baseUrl, child, timeoutMs) {
         signal: AbortSignal.timeout(2000),
       });
       if (response.ok) return;
-    } catch {
-      await sleep(250);
-    }
+    } catch {}
+    await sleep(250);
   }
   throw new Error('celld did not become healthy before the startup deadline');
 }
@@ -72,7 +71,7 @@ function sanitize(text, secret) {
 
 function signalGroup(child, signal) {
   try {
-    if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
+    if (child.pid) process.kill(-child.pid, signal);
     else child.kill(signal);
   } catch {
     try {
@@ -190,7 +189,7 @@ export class CelldRuntime {
           cwd: appDirectory,
           env: celldEnv(appDirectory),
           stdio: ['ignore', 'pipe', 'pipe'],
-          detached: process.platform !== 'win32',
+          detached: true,
         },
       );
 

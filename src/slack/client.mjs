@@ -2,7 +2,13 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { credentialsNeedRefresh, refreshCredentials } from '../credentials.mjs';
 
-const FORM_METHODS = new Set(['users.info', 'users.lookupByEmail', 'files.getUploadURLExternal']);
+const FORM_METHODS = new Set([
+  'users.info',
+  'users.lookupByEmail',
+  'files.getUploadURLExternal',
+  'files.info',
+  'conversations.replies',
+]);
 
 const READ_METHODS = new Set([
   'auth.test',
@@ -24,22 +30,14 @@ const READ_METHODS = new Set([
 
 export const executionSignal = new AsyncLocalStorage();
 
-export function isIdempotent(method) {
+function isIdempotent(method) {
   return READ_METHODS.has(method);
 }
 
 export function requestSignal(timeoutMs) {
   const timeout = AbortSignal.timeout(timeoutMs);
   const external = executionSignal.getStore();
-  if (!external) return timeout;
-  if (AbortSignal.any) return AbortSignal.any([timeout, external]);
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  for (const signal of [timeout, external]) {
-    if (signal.aborted) abort();
-    else signal.addEventListener('abort', abort, { once: true });
-  }
-  return controller.signal;
+  return external ? AbortSignal.any([timeout, external]) : timeout;
 }
 
 export class SlackError extends Error {

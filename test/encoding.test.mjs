@@ -6,6 +6,8 @@ test('form-encodes methods that reject JSON', () => {
   assert.equal(encodingFor('search.messages'), 'form');
   assert.equal(encodingFor('users.info'), 'form');
   assert.equal(encodingFor('users.lookupByEmail'), 'form');
+  assert.equal(encodingFor('files.info'), 'form');
+  assert.equal(encodingFor('conversations.replies'), 'form');
 });
 
 test('uses JSON for the rest', () => {

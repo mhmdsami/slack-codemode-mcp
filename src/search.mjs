@@ -5,7 +5,26 @@ const SKIP_TYPES = new Set([
   'CursorPagination',
 ]);
 
+const UNINDEXED_ARGS = 'Record<string, unknown>';
+
 export function createSearch({ index, allowed }) {
+  const declarations = new Map(
+    Object.keys(index.declarations).map((name) => [name.toLowerCase(), name]),
+  );
+  const entries = index.methods.slice();
+  const indexed = new Set(entries.map((entry) => entry.method));
+  for (const method of allowed) {
+    if (indexed.has(method)) continue;
+    entries.push({
+      method,
+      required: true,
+      args: UNINDEXED_ARGS,
+      response: 'unknown',
+      description: 'Allowed by this server but missing from the bundled SDK index.',
+      unindexed: true,
+    });
+  }
+
   function methods(query, limit, includeBlocked = false) {
     const needle = String(query ?? '')
       .trim()
@@ -13,7 +32,7 @@ export function createSearch({ index, allowed }) {
     if (!needle) return [];
 
     const scored = [];
-    for (const entry of index.methods) {
+    for (const entry of entries) {
       if (!includeBlocked && !allowed.has(entry.method)) continue;
 
       let score = 0;
@@ -37,9 +56,7 @@ export function createSearch({ index, allowed }) {
     const key = String(name ?? '')
       .trim()
       .toLowerCase();
-    const match = Object.keys(index.declarations).find(
-      (candidate) => candidate.toLowerCase() === key,
-    );
+    const match = declarations.get(key);
     return match ? { name: match, declaration: index.declarations[match] } : null;
   }
 
@@ -55,10 +72,14 @@ export function createSearch({ index, allowed }) {
     return [...names];
   }
 
-  function render(entries, includeTypes) {
+  function render(matches, includeTypes) {
     const chunks = [];
-    for (const entry of entries) {
-      const suffix = allowed.has(entry.method) ? '' : '  [blocked by this server]';
+    for (const entry of matches) {
+      const suffix = entry.unindexed
+        ? '  [not in SDK index]'
+        : allowed.has(entry.method)
+          ? ''
+          : '  [blocked by this server]';
       const lines = [
         `${entry.method}(options${entry.required ? '' : '?'}: ${entry.args})${suffix}`,
       ];
@@ -66,7 +87,7 @@ export function createSearch({ index, allowed }) {
       if (entry.response) lines.push(`  → ${entry.response}`);
       if (entry.see) lines.push(`  ${entry.see}`);
 
-      if (includeTypes) {
+      if (includeTypes && !entry.unindexed) {
         const declaration = index.declarations[entry.args];
         if (declaration) {
           const trimmed =
@@ -86,5 +107,5 @@ export function createSearch({ index, allowed }) {
     return chunks.join('\n\n---\n\n');
   }
 
-  return { methods, type, render, index, allowed };
+  return { methods, type, render };
 }

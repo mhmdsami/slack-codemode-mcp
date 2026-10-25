@@ -1,5 +1,6 @@
-import { isFresh } from '../cache.mjs';
+import { getCached, isFresh, setCached } from '../cache.mjs';
 import { ActionError } from '../errors.mjs';
+import { USER_ID } from './input.mjs';
 
 export function normalizeName(value) {
   return String(value ?? '')
@@ -31,6 +32,13 @@ export function summarizeUser(user) {
   };
 }
 
+function notFound(error, query) {
+  if (error?.code === 'users_not_found' || error?.code === 'user_not_found') {
+    return new ActionError('not_found', `No user matched "${query}".`);
+  }
+  return null;
+}
+
 export function createUserActions({ slack, cache }) {
   async function search(query) {
     const response = await slack.call('assistant.search.context', {
@@ -53,6 +61,7 @@ export function createUserActions({ slack, cache }) {
 
     const users = [];
     let cursor = '';
+    let complete = true;
     for (let page = 0; page < 2; page += 1) {
       const response = await slack.call('users.list', {
         limit: 1000,
@@ -70,12 +79,15 @@ export function createUserActions({ slack, cache }) {
       }
       cursor = response.response_metadata?.next_cursor ?? '';
       if (!cursor) break;
+      if (page === 1) complete = false;
     }
 
     cache.users = users;
     cache.usersAt = Date.now();
+    cache.usersComplete = complete;
     for (const user of users) {
-      cache.names.set(user.id, user.real_name || user.display_name || user.name);
+      const label = user.real_name || user.display_name || user.name;
+      if (label) setCached(cache.names, user.id, label, cache.maxEntries);
     }
     return users;
   }
@@ -94,14 +106,22 @@ export function createUserActions({ slack, cache }) {
       .replace(/^@/, '');
     if (!raw) throw new ActionError('invalid_input', 'A user name, id, or email is required.');
 
-    if (/^U[A-Z0-9]{6,}$/i.test(raw)) {
-      const response = await slack.call('users.info', { user: raw });
-      return { user: summarizeUser(response.user) };
+    if (USER_ID.test(raw)) {
+      try {
+        const response = await slack.call('users.info', { user: raw });
+        return { user: summarizeUser(response.user) };
+      } catch (error) {
+        throw notFound(error, raw) ?? error;
+      }
     }
 
     if (raw.includes('@')) {
-      const response = await slack.call('users.lookupByEmail', { email: raw });
-      return { user: summarizeUser(response.user) };
+      try {
+        const response = await slack.call('users.lookupByEmail', { email: raw });
+        return { user: summarizeUser(response.user) };
+      } catch (error) {
+        throw notFound(error, raw) ?? error;
+      }
     }
 
     const remote = await search(raw).catch(() => []);
@@ -123,12 +143,18 @@ export function createUserActions({ slack, cache }) {
 
     let matches = rank(await list(), raw);
     if (matches.length === 0) matches = rank(await list({ force: true }), raw);
-    if (matches.length === 0) throw new ActionError('not_found', `No user matched "${raw}".`);
+    if (matches.length === 0) {
+      const suffix = cache.usersComplete
+        ? ''
+        : ' The directory scan is capped, so the user may exist beyond it.';
+      throw new ActionError('not_found', `No user matched "${raw}".${suffix}`);
+    }
 
     return {
       user: matches.length === 1 ? summarizeUser(matches[0]) : null,
       matches: matches.slice(0, 5).map(summarizeUser),
       total: matches.length,
+      complete: cache.usersComplete,
     };
   }
 
@@ -143,14 +169,19 @@ export function createUserActions({ slack, cache }) {
   }
 
   async function namesFor(messages) {
-    const names = new Map(cache.names);
-    const unresolved = [...new Set(messages.map((message) => message.user).filter(Boolean))]
-      .filter((id) => !names.has(id))
-      .slice(0, 25);
-    for (const id of unresolved) {
+    const names = new Map();
+    const unresolved = [];
+    for (const id of new Set(messages.map((message) => message.user).filter(Boolean))) {
+      const cached = getCached(cache.names, id, cache.ttlMs);
+      if (cached) names.set(id, cached);
+      else unresolved.push(id);
+    }
+    for (const id of unresolved.slice(0, 25)) {
       try {
         const response = await slack.call('users.info', { user: id });
-        names.set(id, response.user?.real_name || response.user?.name || id);
+        const label = response.user?.real_name || response.user?.name || id;
+        names.set(id, label);
+        setCached(cache.names, id, label, cache.maxEntries);
       } catch {
         names.set(id, id);
       }
@@ -158,5 +189,5 @@ export function createUserActions({ slack, cache }) {
     return names;
   }
 
-  return { search, list, find, resolve, namesFor };
+  return { find, resolve, namesFor };
 }

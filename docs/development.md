@@ -7,67 +7,84 @@ npm ci
 npx lefthook install
 ```
 
-Node 20+ and celld v0.6.2 on `PATH`. celld is only needed to run the server, not for tests or linting.
+You need Node 20.12 or newer. celld v0.6.2 is only needed to run the server, not for tests or linting.
 
 ## Scripts
 
 | Command | Purpose |
 |---|---|
 | `npm run gate` | Biome plus unit tests. This is what CI runs. |
-| `npm test` | `node --test` over `test/`. |
-| `npm run lint` | `biome check`. |
-| `npm run format` | `biome format --write`. |
-| `npm run doctor` | Slack token and scope probe. |
-| `npm run auth` | PKCE authorization. |
+| `npm test` | Run `node --test` over `test/`. |
+| `npm run lint` | Run `biome check`. |
+| `npm run format` | Run `biome format --write`. |
+| `npm run doctor` | Check the Slack token and scopes. |
+| `npm run auth` | Start the PKCE authorization flow. |
 | `npm run generate` | Rebuild `api-index.json`. |
 | `npm start` | Run the MCP server over stdio. |
 
 ## Hooks
 
-`lefthook.yml` runs Biome and the unit tests on commit, and the full gate on push. Hooks are installed by `prepare` after `npm install`; run `npx lefthook install` manually if needed.
+Lefthook runs Biome and the unit tests on commit. It runs the full gate on push.
+
+Hooks are installed by `prepare` after `npm install`. To install them by hand:
+
+```bash
+npx lefthook install
+```
 
 ## Tests
 
-Tests use `node:test` and cover pure logic:
+Tests use `node:test` and never call Slack or need a token.
 
-- permalink parsing
+What they cover:
+
+- permalink parsing and target resolution
 - name normalization and scoring
 - request encoding and the JSON-to-form fallback
-- search filtering and rendering
-- allowlist and index loading
-- cache freshness
+- search filtering, unindexed allowlisted methods, and rendering
+- action input validation and page limits
+- canvas edit validation, share threads, and section filters
+- cache freshness, expiry, and eviction
 - token resolution from the environment
+- guest result formatting and the sandbox envelope
+- bridge authentication, origin rejection, and body limits
 - 429 handling with an injected fetch
 
-Tests never call Slack and never need a token. Add a test whenever logic can be extracted from a module.
+Add a test whenever logic can be pulled out of a module.
 
 ## Adding an action
 
-1. Implement it in `src/actions/<area>.mjs` with injected `slack`, `cache`, and `limits`.
-2. Wire it in `src/actions/index.mjs`.
-3. Expose it on `app` in `celld/guest.js`.
-4. Add the methods it calls to `allowlist.json` and the scopes to `scripts/auth.mjs` if needed.
-5. Document it in `docs/actions.md` and the README table.
-6. Run `npm run gate` and `npm run doctor`.
+1. Write the action in `src/actions/<area>.mjs`. Inject `slack`, `cache`, and `limits`.
+2. Validate input with the helpers in `src/actions/input.mjs`.
+3. Add the case in `src/actions/index.mjs`.
+4. Expose it on `app` in `celld/guest.js`.
+5. Add any new methods to `allowlist.json` and scopes to `scripts/auth.mjs`.
+6. Document it in `docs/actions.md` and the README table.
+7. Add a test. Run `npm run gate` and `npm run doctor`.
 
-Actions should validate input, return small JSON, and never trust guest-supplied limits.
+Actions should validate input, return small JSON, and never trust limits from the guest.
 
 ## API index
 
-`api-index.json` is generated from `@slack/web-api`'s declarations:
+`api-index.json` is generated from the `@slack/web-api` declarations:
 
 ```bash
 npm run generate
 ```
 
-It contains 275 methods and roughly 1,094 type declarations. Regenerate after upgrading the SDK and commit the result.
+It contains about 275 methods and 1,094 type declarations.
+
+Regenerate after upgrading the SDK and commit the result.
 
 ## Code conventions
 
-- ESM, two-space indent, single quotes, semicolons, trailing commas. Biome enforces it.
-- No comments in source files. Explanations belong in docs, commit messages, or names.
-- Prefer small exported functions with injected dependencies over globals.
-- Keep the host as the only place that touches the token, the allowlist, and Slack.
+Use ESM, two-space indent, single quotes, semicolons, and trailing commas. Biome enforces this.
+
+Do not add comments to source files. Put explanations in docs, commit messages, or names.
+
+Prefer small exported functions with injected dependencies over globals.
+
+The host is the only place that touches the token, the allowlist, and Slack.
 
 ## Release
 

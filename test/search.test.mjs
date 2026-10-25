@@ -36,7 +36,7 @@ const index = {
   },
 };
 
-const allowed = new Set(['chat.postMessage']);
+const allowed = new Set(['chat.postMessage', 'canvases.getContent']);
 const search = createSearch({ index, allowed });
 
 test('searches only allowed methods by default', () => {
@@ -60,4 +60,17 @@ test('looks up declarations by name', () => {
   const found = search.type('chatargs');
   assert.equal(found.name, 'ChatArgs');
   assert.equal(search.type('missing'), null);
+});
+
+test('lists allowed methods missing from the SDK index', () => {
+  const results = search.methods('getContent', 5);
+  assert.equal(results[0].method, 'canvases.getContent');
+  assert.equal(results[0].unindexed, true);
+  assert.match(search.render(results, false), /\[not in SDK index\]/);
+});
+
+test('omits type declarations unless requested', () => {
+  const text = search.render(search.methods('postMessage', 1), false);
+  assert.doesNotMatch(text, /interface ChatArgs/);
+  assert.match(text, /chat\.postMessage/);
 });

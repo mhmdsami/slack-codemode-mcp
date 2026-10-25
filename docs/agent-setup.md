@@ -5,7 +5,7 @@ Instructions for a coding agent asked to install and register Slack Code Mode MC
 ## Preconditions
 
 - macOS arm64 or Linux. Windows is not supported.
-- Node.js 20 or newer.
+- Node.js 20.12 or newer.
 - celld v0.6.2 on `PATH`.
 - This repository checked out locally.
 

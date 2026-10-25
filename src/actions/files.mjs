@@ -3,6 +3,7 @@ import { open, realpath } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { ActionError } from '../errors.mjs';
 import { requestSignal } from '../slack/client.mjs';
+import { optionalText, optionalTs, requiredText } from './input.mjs';
 
 function isInside(root, target) {
   const rel = relative(root, target);
@@ -30,6 +31,21 @@ function assertNotSystemPath(target) {
 
 async function canonical(target) {
   return realpath(target).catch(() => resolve(target));
+}
+
+export function assertUploadUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    throw new ActionError('internal_error', 'Slack returned an invalid upload URL.');
+  }
+  const host = url.hostname;
+  const allowed = host === 'slack.com' || host.endsWith('.slack.com');
+  if (url.protocol !== 'https:' || !allowed) {
+    throw new ActionError('internal_error', 'Slack returned an upload URL outside slack.com.');
+  }
+  return url;
 }
 
 export async function resolveUploadPath(inputPath, limits) {
@@ -63,6 +79,7 @@ export async function resolveUploadPath(inputPath, limits) {
 
   const denied = [limits.configDir, limits.configDir && join(limits.configDir, 'token')]
     .concat(limits.sensitiveDirs ?? [])
+    .concat(limits.sensitiveFiles ?? [])
     .filter(Boolean);
   for (const entry of denied) {
     const lexical = resolve(entry);
@@ -80,6 +97,7 @@ export async function resolveUploadPath(inputPath, limits) {
 
 export function createFileActions({ slack, messages, limits }) {
   async function send(input) {
+    const threadTs = optionalTs(input.thread_ts, 'thread_ts');
     const channel = await messages.channelForTarget(
       await messages.resolveTarget(input.to ?? input.channel),
     );
@@ -87,7 +105,7 @@ export function createFileActions({ slack, messages, limits }) {
     let bytes;
     let filename;
     if (input.path) {
-      const real = await resolveUploadPath(input.path, limits);
+      const real = await resolveUploadPath(requiredText(input.path, 'path', { max: 4096 }), limits);
       let handle;
       try {
         handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -110,18 +128,24 @@ export function createFileActions({ slack, messages, limits }) {
       filename = input.filename || basename(real);
     } else if (typeof input.content === 'string') {
       bytes = Buffer.from(input.content, 'utf8');
-      filename = input.filename || 'message.txt';
+      if (bytes.byteLength > limits.maxUploadBytes) {
+        throw new ActionError('invalid_input', 'Content exceeds the upload size limit.');
+      }
+      filename = optionalText(input.filename, 'filename', { max: 255 }) ?? 'message.txt';
     } else {
       throw new ActionError('invalid_input', 'Provide `path` or `content`.');
     }
+    filename = requiredText(filename, 'filename', { max: 255 });
 
+    const altText = optionalText(input.alt_txt, 'alt_txt', { max: 2000 });
     const upload = await slack.call('files.getUploadURLExternal', {
       filename,
       length: bytes.byteLength,
-      ...(input.alt_txt ? { alt_txt: input.alt_txt } : {}),
+      ...(altText ? { alt_txt: altText } : {}),
     });
 
-    const uploaded = await fetch(upload.upload_url, {
+    const uploadUrl = assertUploadUrl(upload.upload_url);
+    const uploaded = await fetch(uploadUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: bytes,
@@ -132,10 +156,12 @@ export function createFileActions({ slack, messages, limits }) {
       throw new ActionError('internal_error', `File upload failed with HTTP ${uploaded.status}.`);
     }
 
+    const comment = optionalText(input.comment, 'comment', { max: 40_000 });
     const completed = await slack.call('files.completeUploadExternal', {
       files: [{ id: upload.file_id, title: filename }],
       channel_id: channel.id,
-      ...(input.comment ? { initial_comment: String(input.comment) } : {}),
+      ...(threadTs ? { thread_ts: threadTs } : {}),
+      ...(comment ? { initial_comment: comment } : {}),
     });
 
     return {

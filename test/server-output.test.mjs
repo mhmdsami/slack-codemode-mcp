@@ -28,3 +28,23 @@ test('prints a client_msg_id from an ambiguous write', () => {
   assert.equal(result.isError, true);
   assert.match(result.text, /client_msg_id=retry-3/);
 });
+
+test('caps by bytes, not characters', () => {
+  const result = formatExecution({ ok: true, value: 'é'.repeat(LIMITS.maxResultBytes) });
+  assert.match(result.text, /\[truncated\]$/);
+  assert.ok(Buffer.byteLength(result.text) <= LIMITS.maxResultBytes + 64);
+});
+
+test('prints retry hints and ambiguous candidates', () => {
+  const result = formatExecution({
+    ok: false,
+    error: {
+      message: 'matched 2 users',
+      code: 'ambiguous',
+      retry_after: 5,
+      matches: [{ id: 'U1' }, { id: 'U2' }],
+    },
+  });
+  assert.match(result.text, /retry_after=5/);
+  assert.match(result.text, /matches=\[\{"id":"U1"\},\{"id":"U2"\}\]/);
+});

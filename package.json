@@ -31,7 +31,7 @@
   "description": "Code Mode MCP server for Slack, executed in a sandboxed celld V8 isolate.",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "repository": {
     "type": "git",
