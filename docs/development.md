@@ -43,6 +43,7 @@ What they cover:
 - request encoding and the JSON-to-form fallback
 - search filtering, unindexed allowlisted methods, and rendering
 - action input validation and page limits
+- condensed thread transcripts and Slack text rendering
 - canvas edit validation, share threads, and section filters
 - cache freshness, expiry, and eviction
 - token resolution from the environment

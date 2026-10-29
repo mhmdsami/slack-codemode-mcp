@@ -160,6 +160,8 @@ return await app.whoami();
 
 `app.*` is the recommended surface. It covers lookups, DMs, posts, message edits and search, threads, message links, file uploads, and canvases.
 
+Thread reads return a condensed transcript by default, so reading and summarizing does not carry raw message objects through the model. Pass `{ format: "json" }` when you need fields.
+
 Actions paginate and cache in the host, not in the guest. Raw allowlisted methods stay available through `slack.*` and `api.call`.
 
 ```js

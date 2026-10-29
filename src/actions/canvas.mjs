@@ -10,6 +10,7 @@ import {
   requiredText,
   USER_ID,
 } from './input.mjs';
+import { renderMessageText } from './text.mjs';
 
 const MAX_MARKDOWN = 60_000;
 const MAX_SHARE_THREADS = 10;
@@ -307,7 +308,7 @@ export function createCanvasActions({ slack, users }) {
         user: message.user ? (names.get(message.user) ?? message.user) : null,
         user_id: message.user ?? null,
         ts: message.ts,
-        text: message.text ?? '',
+        text: renderMessageText(message.text, names),
       })),
       ...(skipped.length ? { skipped } : {}),
       ...(threads.length > MAX_SHARE_THREADS

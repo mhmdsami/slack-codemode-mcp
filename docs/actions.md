@@ -143,11 +143,11 @@ return await app.search("deploy failed", { count: 20, sort: "timestamp" });
 }
 ```
 
-`count` is clamped to 1–100 and `page` to 1–100. Sort by `score` or `timestamp`, in `asc` or `desc` order. Set `highlight: true` to keep Slack's match markers in `text`.
+`count` is clamped to 1–100 and `page` to 1–100. Sort by `score` or `timestamp`, in `asc` or `desc` order. Set `highlight: true` to keep Slack's match markers in `text`. Match text is unescaped, and mentions and links are rendered.
 
-### `app.thread(channel, ts, limit)`
+### `app.thread(channel, ts, limit, options)`
 
-Reads a thread and resolves user names.
+Reads a thread and returns a condensed transcript.
 
 ```js
 return await app.thread("#oncall", "1699999999.000000", 50);
@@ -156,9 +156,28 @@ return await app.thread("#oncall", "1699999999.000000", 50);
 ```json
 {
   "channel": "C123ABC",
-  "count": 2,
+  "count": 3,
   "has_more": false,
   "next_cursor": null,
+  "text": "10-20 05:25 Jane Doe: the parent message [4 replies]\n10-20 05:31 John Smith: a reply\n10-20 05:33 Jane Doe: another reply"
+}
+```
+
+The transcript is one line per message: UTC time, author, text, and a short note for files, attachments, reactions, edits, and reply counts. Mentions become names, Slack entities are unescaped, and links keep their label and URL.
+
+This is the default because it is much smaller than raw message objects, and reading plus summarizing is the common case.
+
+When you need fields, ask for JSON:
+
+```js
+return await app.thread("#oncall", "1699999999.000000", 50, { format: "json" });
+```
+
+```json
+{
+  "channel": "C123ABC",
+  "count": 2,
+  "has_more": false,
   "messages": [
     {
       "user": "Jane Doe",
@@ -178,7 +197,7 @@ return await app.thread("#oncall", "1699999999.000000", 50);
 
 `limit` is clamped to 1–200 and defaults to 50. When `has_more` is `true`, pass `next_cursor` to a raw `slack.conversations.replies` call.
 
-### `app.readLink(url)`
+### `app.readLink(url, options)`
 
 Reads a message from a Slack permalink. If the message has a thread, the whole thread is returned.
 
@@ -186,7 +205,9 @@ Reads a message from a Slack permalink. If the message has a thread, the whole t
 return await app.readLink("https://workspace.slack.com/archives/C123ABC/p1699999999000000");
 ```
 
-Messages use the same shape as `app.thread`, plus `is_thread_parent`. The result also includes `has_more`.
+The result uses the same condensed `text` as `app.thread`, plus `ts` and `thread_ts`. Pass `{ format: "json" }` for structured messages. JSON messages also include `is_thread_parent`.
+
+The result includes `has_more`.
 
 ## Files
 
@@ -256,7 +277,7 @@ const { count, comments } = await app.canvas.comments("F1234ABCD", 100);
 }
 ```
 
-Slack posts a message when someone shares a canvas in a channel. Comments are replies to that message.
+Slack posts a message when someone shares a canvas in a channel. Comments are replies to that message. Comment text is unescaped and mentions are resolved.
 
 This action finds the share message from the canvas metadata, then reads only those replies. It does not scan the channel, so unrelated messages never appear.
 

@@ -195,3 +195,25 @@ test('rejects a non-string code payload', async () => {
   ).json();
   assert.equal(result.error.code, 'invalid_input');
 });
+
+test('routes thread options through the bridge', async () => {
+  const calls = [];
+  const host = async (_url, init) => {
+    calls.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({ ok: true, value: { ok: true } }));
+  };
+
+  await run(
+    "return await app.thread('C12345678', '1699999999.000000', 50, { format: 'json' });",
+    host,
+  );
+  assert.deepEqual(calls[0], {
+    action: 'thread',
+    input: {
+      channel: 'C12345678',
+      ts: '1699999999.000000',
+      limit: 50,
+      format: 'json',
+    },
+  });
+});

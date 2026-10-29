@@ -90,6 +90,49 @@ test('thread clamps the page limit and surfaces pagination', async () => {
   assert.equal(calls[0].limit, 1);
   assert.equal(result.has_more, true);
   assert.equal(result.next_cursor, 'cursor-1');
+  assert.equal(result.messages, undefined);
+  assert.match(result.text, /Jane: hi/);
+});
+
+test('thread returns structured messages when asked', async () => {
+  const actions = createMessageActions({
+    slack: {
+      call: async () => ({
+        messages: [{ ts: '1.000000', user: 'U1', text: 'hi' }],
+      }),
+    },
+    cache: cache(),
+    users: { namesFor: async () => new Map([['U1', 'Jane']]) },
+    channels: {},
+  });
+
+  const result = await actions.thread({
+    channel: 'C12345678',
+    ts: '1699999999.000000',
+    format: 'json',
+  });
+  assert.equal(result.messages.length, 1);
+  assert.equal(result.messages[0].text, 'hi');
+  assert.equal(result.text, undefined);
+});
+
+test('thread rejects an unknown format', async () => {
+  const actions = createMessageActions({
+    slack: { call: async () => assert.fail('Slack should not be called') },
+    cache: cache(),
+    users: {},
+    channels: {},
+  });
+
+  await assert.rejects(
+    () =>
+      actions.thread({
+        channel: 'C12345678',
+        ts: '1699999999.000000',
+        format: 'markdown',
+      }),
+    /format.*text.*json/,
+  );
 });
 
 test('post requires non-empty text and a valid thread timestamp', async () => {
@@ -238,7 +281,7 @@ test('search compacts matches and validates sort', async () => {
                 username: 'jane',
                 user: 'U1',
                 ts: '1.000001',
-                text: 'hello',
+                text: 'hello &gt; world',
                 permalink: 'https://example/1',
               },
             ],
@@ -257,6 +300,33 @@ test('search compacts matches and validates sort', async () => {
   assert.equal(result.count, 1);
   assert.equal(result.matches[0].channel, 'general');
   assert.equal(result.matches[0].user, 'jane');
+  assert.equal(result.matches[0].text, 'hello > world');
 
   await assert.rejects(() => actions.search({ query: 'x', sort: 'recent' }), /sort/);
+});
+
+test('readLink returns a condensed transcript by default', async () => {
+  const actions = createMessageActions({
+    slack: {
+      call: async (method) => {
+        if (method !== 'conversations.replies') throw new Error(`unexpected ${method}`);
+        return {
+          messages: [
+            { ts: '1699999999.000000', user: 'U1', text: 'parent' },
+            { ts: '1700000000.000000', user: 'U1', text: 'reply &gt; ok' },
+          ],
+        };
+      },
+    },
+    cache: cache(),
+    users: { namesFor: async () => new Map([['U1', 'Jane']]) },
+    channels: {},
+  });
+
+  const result = await actions.readLink({
+    url: 'https://x.slack.com/archives/C12345678/p1699999999000000?thread_ts=1699999999.000000',
+  });
+  assert.equal(result.messages, undefined);
+  assert.match(result.text, /Jane: parent/);
+  assert.match(result.text, /Jane: reply > ok/);
 });

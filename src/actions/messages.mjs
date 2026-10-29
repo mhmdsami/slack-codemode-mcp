@@ -11,6 +11,7 @@ import {
   requiredTs,
   USER_ID,
 } from './input.mjs';
+import { condensedTranscript, renderMessageText } from './text.mjs';
 
 const SORTS = ['score', 'timestamp'];
 const SORT_DIRS = ['asc', 'desc'];
@@ -56,12 +57,20 @@ function messageOptions(input) {
   return options;
 }
 
+function readFormat(value) {
+  const format = value === undefined ? 'text' : value;
+  if (format !== 'text' && format !== 'json') {
+    throw new ActionError('invalid_input', '`format` must be "text" or "json".');
+  }
+  return format;
+}
+
 export function summarizeMessage(message, names) {
   return {
     user: message.user ? (names.get(message.user) ?? message.user) : null,
     user_id: message.user ?? null,
     ts: message.ts,
-    text: message.text ?? '',
+    text: renderMessageText(message.text, names),
     files: (message.files ?? []).map((file) => ({
       id: file.id,
       name: file.name ?? file.title ?? null,
@@ -222,7 +231,7 @@ export function createMessageActions({ slack, cache, users, channels }) {
       user: match.username ?? null,
       user_id: match.user ?? null,
       ts: match.ts ?? null,
-      text: match.text ?? '',
+      text: renderMessageText(match.text ?? ''),
       permalink: match.permalink ?? null,
     }));
     return {
@@ -238,6 +247,7 @@ export function createMessageActions({ slack, cache, users, channels }) {
   async function thread(input) {
     const channel = await resolveChannel(input.channel);
     const ts = requiredTs(input.ts, 'ts');
+    const format = readFormat(input.format);
 
     const response = await slack.call('conversations.replies', {
       channel: channel.id,
@@ -246,21 +256,28 @@ export function createMessageActions({ slack, cache, users, channels }) {
     });
     const messages = response.messages ?? [];
     const names = await users.namesFor(messages);
-
-    return {
+    const result = {
       channel: channel.id,
       count: messages.length,
       has_more: Boolean(response.has_more),
       next_cursor: response.response_metadata?.next_cursor ?? null,
-      messages: messages.map((message) => ({
-        ...summarizeMessage(message, names),
-        reply_count: message.reply_count ?? 0,
-      })),
     };
+
+    if (format === 'json') {
+      return {
+        ...result,
+        messages: messages.map((message) => ({
+          ...summarizeMessage(message, names),
+          reply_count: message.reply_count ?? 0,
+        })),
+      };
+    }
+    return { ...result, text: condensedTranscript(messages, names) };
   }
 
   async function readLink(input) {
     const link = parsePermalink(input.url);
+    const format = readFormat(input.format);
     let messages;
     let hasMore = false;
 
@@ -292,17 +309,24 @@ export function createMessageActions({ slack, cache, users, channels }) {
     }
 
     const names = await users.namesFor(messages);
-    return {
+    const result = {
       channel: link.channel,
       ts: link.ts,
       thread_ts: link.threadTs,
       count: messages.length,
       has_more: hasMore,
-      messages: messages.map((message) => ({
-        ...summarizeMessage(message, names),
-        is_thread_parent: message.ts === (link.threadTs ?? link.ts),
-      })),
     };
+
+    if (format === 'json') {
+      return {
+        ...result,
+        messages: messages.map((message) => ({
+          ...summarizeMessage(message, names),
+          is_thread_parent: message.ts === (link.threadTs ?? link.ts),
+        })),
+      };
+    }
+    return { ...result, text: condensedTranscript(messages, names) };
   }
 
   return { dm, post, edit, search, thread, readLink, resolveTarget, channelForTarget };

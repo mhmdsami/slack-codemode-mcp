@@ -188,8 +188,9 @@ function makeSlack(host, signal) {
       post: (to, text, options = {}) => act('post', { to, text, ...options }),
       edit: (channel, ts, text, options = {}) => act('edit', { channel, ts, text, ...options }),
       search: (query, options = {}) => act('search', { query, ...options }),
-      thread: (channel, ts, limit) => act('thread', { channel, ts, limit }),
-      readLink: (url) => act('readLink', { url }),
+      thread: (channel, ts, limit, options = {}) =>
+        act('thread', { ...options, channel, ts, limit }),
+      readLink: (url, options = {}) => act('readLink', { ...options, url }),
       sendFile: (options) => act('sendFile', options),
       canvas: {
         create: (title, markdown, channel_id) =>
