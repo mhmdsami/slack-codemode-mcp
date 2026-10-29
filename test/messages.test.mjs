@@ -68,7 +68,7 @@ test('thread clamps the page limit and surfaces pagination', async () => {
   const calls = [];
   const actions = createMessageActions({
     slack: {
-      call: async (method, args) => {
+      call: async (_method, args) => {
         calls.push(args);
         return {
           messages: [{ ts: '1.000000', user: 'U1', text: 'hi' }],

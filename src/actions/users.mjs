@@ -171,7 +171,13 @@ export function createUserActions({ slack, cache }) {
   async function namesFor(messages) {
     const names = new Map();
     const unresolved = [];
-    for (const id of new Set(messages.map((message) => message.user).filter(Boolean))) {
+    const ids = new Set();
+    for (const message of messages) {
+      if (message.user) ids.add(message.user);
+      const text = typeof message.text === 'string' ? message.text : '';
+      for (const match of text.matchAll(/<@([A-Z0-9]+)(?:\|[^>]+)?>/g)) ids.add(match[1]);
+    }
+    for (const id of ids) {
       const cached = getCached(cache.names, id, cache.ttlMs);
       if (cached) names.set(id, cached);
       else unresolved.push(id);

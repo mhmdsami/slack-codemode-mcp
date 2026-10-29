@@ -163,7 +163,7 @@ function makeSlack(host, signal) {
       get(_target, prop) {
         if (prop === 'then') return undefined;
         if (prop === Symbol.toStringTag || prop === 'toString' || prop === 'valueOf') {
-          return () => 'slack.' + parts.join('.');
+          return () => `slack.${parts.join('.')}`;
         }
         return path([...parts, String(prop)]);
       },

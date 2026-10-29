@@ -74,3 +74,23 @@ test('maps a missing email lookup to a not_found action error', async () => {
     (error) => error.code === 'not_found' && /nobody@example\.com/.test(error.message),
   );
 });
+
+test('namesFor resolves mentioned users, not just authors', async () => {
+  const calls = [];
+  const slack = {
+    call: async (method, args) => {
+      calls.push(args.user);
+      if (method !== 'users.info') throw new Error(`unexpected ${method}`);
+      return { user: { id: args.user, real_name: args.user === 'U2' ? 'Harsh' : 'Jane' } };
+    },
+  };
+  const users = createUserActions({
+    slack,
+    cache: { names: new Map(), ttlMs: 1000, maxEntries: 100 },
+  });
+
+  const names = await users.namesFor([{ user: 'U1', text: 'ping <@U2> and <@U2|harsh> about it' }]);
+  assert.equal(names.get('U1'), 'Jane');
+  assert.equal(names.get('U2'), 'Harsh');
+  assert.deepEqual(calls.sort(), ['U1', 'U2']);
+});

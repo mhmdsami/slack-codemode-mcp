@@ -61,7 +61,7 @@ if (!clientId) {
       '',
       `Add this redirect URL to the app: ${REDIRECT_URI}`,
       'Add these User Token Scopes:',
-      '  ' + USER_SCOPES.join(' '),
+      `  ${USER_SCOPES.join(' ')}`,
     ].join('\n'),
   );
   process.exit(1);
@@ -112,7 +112,7 @@ console.log('these scopes under OAuth & Permissions -> User Token Scopes. Reques
 console.log('with SLACK_USER_SCOPES=chat:write to find the culprit.');
 console.log('');
 if (!noOpen) openBrowser(authorizeUrl);
-if (noOpen) console.log(authorizeUrl + '\n');
+if (noOpen) console.log(`${authorizeUrl}\n`);
 
 function escapeHtml(value) {
   return String(value ?? '').replace(
