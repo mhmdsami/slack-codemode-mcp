@@ -195,3 +195,30 @@ test('returns a client_msg_id for an ambiguous message write', async () => {
   );
   assert.equal(JSON.parse(body).client_msg_id, clientMsgId);
 });
+
+test('downloads a file with the bearer token', async () => {
+  let headers;
+  const client = createSlackClient(() => 'xoxp-test', {
+    fetch: async (_url, options) => {
+      headers = options.headers;
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    },
+  });
+
+  const bytes = await client.download('https://files.slack.com/x', 1024);
+  assert.deepEqual([...bytes], [1, 2, 3]);
+  assert.equal(headers.authorization, 'Bearer xoxp-test');
+});
+
+test('refuses a download larger than the cap', async () => {
+  const client = createSlackClient(() => 'xoxp-test', {
+    fetch: async () => new Response(new Uint8Array(10), { status: 200 }),
+  });
+
+  assert.equal(await client.download('https://files.slack.com/x', 5), null);
+});
+
+test('download requires a token', async () => {
+  const client = createSlackClient(() => null, { fetch: async () => new Response('') });
+  await assert.rejects(() => client.download('https://files.slack.com/x'), /not configured/);
+});

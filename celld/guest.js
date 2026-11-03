@@ -93,6 +93,42 @@ function format(value) {
   }
 }
 
+function imageList(value) {
+  if (!value || typeof value !== 'object' || isArray(value)) return [];
+  let raw;
+  try {
+    raw = value.images;
+  } catch {
+    return [];
+  }
+  if (!isArray(raw)) return [];
+
+  const images = [];
+  for (const item of raw.slice(0, 4)) {
+    if (!item || typeof item !== 'object') continue;
+    if (typeof item.id !== 'string' || !/^F[A-Z0-9]+$/.test(item.id)) continue;
+    images.push({
+      id: item.id,
+      name: typeof item.name === 'string' ? item.name.slice(0, 200) : null,
+      mimetype: typeof item.mimetype === 'string' ? item.mimetype.slice(0, 64) : null,
+    });
+  }
+  return images;
+}
+
+function takeImages(value) {
+  const images = imageList(value);
+  if (images.length === 0) return { value, images: [] };
+
+  const cleaned = Object.create(null);
+  for (const name of getOwnPropertyNames(value)) {
+    if (name === 'images') continue;
+    const descriptor = getOwnPropertyDescriptor(value, name);
+    if (descriptor && 'value' in descriptor) cleaned[name] = descriptor.value;
+  }
+  return { value: cleaned, images };
+}
+
 function errorDetail(error) {
   const detail = {};
   if (typeof error === 'string') {
@@ -116,7 +152,7 @@ function errorDetail(error) {
   return detail;
 }
 
-function makeSlack(host, signal) {
+function makeSlack(host, signal, collected = []) {
   const request = async (payload) => {
     let body;
     try {
@@ -156,7 +192,11 @@ function makeSlack(host, signal) {
   const call = (method, args) =>
     request({ method: String(method), args: args === undefined ? {} : args });
 
-  const act = (action, input) => request({ action, input: input === undefined ? {} : input });
+  const act = async (action, input) => {
+    const value = await request({ action, input: input === undefined ? {} : input });
+    for (const image of imageList(value)) collected.push(image);
+    return value;
+  };
 
   const path = (parts) =>
     new Proxy(() => {}, {
@@ -252,13 +292,28 @@ export default {
         logs,
       });
     }
-    const { slack, api, app } = makeSlack(env.SLACK, request.signal);
+    const collected = [];
+    const { slack, api, app } = makeSlack(env.SLACK, request.signal, collected);
     let value;
     try {
       value = await fn(slack, api, app, consoleShim);
     } catch (error) {
       return responseEnvelope({ ok: false, error: errorDetail(error), logs });
     }
-    return responseEnvelope({ ok: true, value: truncate(format(value), MAX_RESULT), logs });
+    const extracted = takeImages(value);
+    const images = [];
+    const seen = new Set();
+    for (const image of [...collected, ...extracted.images]) {
+      if (seen.has(image.id)) continue;
+      seen.add(image.id);
+      images.push(image);
+      if (images.length >= 4) break;
+    }
+    return responseEnvelope({
+      ok: true,
+      value: truncate(format(extracted.value), MAX_RESULT),
+      logs,
+      ...(images.length ? { images } : {}),
+    });
   },
 };

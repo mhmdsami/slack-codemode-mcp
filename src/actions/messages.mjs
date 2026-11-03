@@ -1,5 +1,6 @@
 import { getCached, setCached } from '../cache.mjs';
 import { ActionError } from '../errors.mjs';
+import { imageRefs } from '../images.mjs';
 import {
   CHANNEL_ID,
   optionalArray,
@@ -256,11 +257,13 @@ export function createMessageActions({ slack, cache, users, channels }) {
     });
     const messages = response.messages ?? [];
     const names = await users.namesFor(messages);
+    const images = input.images ? imageRefs(messages) : [];
     const result = {
       channel: channel.id,
       count: messages.length,
       has_more: Boolean(response.has_more),
       next_cursor: response.response_metadata?.next_cursor ?? null,
+      ...(images.length ? { images } : {}),
     };
 
     if (format === 'json') {
@@ -309,12 +312,14 @@ export function createMessageActions({ slack, cache, users, channels }) {
     }
 
     const names = await users.namesFor(messages);
+    const images = input.images ? imageRefs(messages) : [];
     const result = {
       channel: link.channel,
       ts: link.ts,
       thread_ts: link.threadTs,
       count: messages.length,
       has_more: hasMore,
+      ...(images.length ? { images } : {}),
     };
 
     if (format === 'json') {

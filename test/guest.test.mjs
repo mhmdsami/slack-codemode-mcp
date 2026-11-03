@@ -217,3 +217,38 @@ test('routes thread options through the bridge', async () => {
     },
   });
 });
+
+test('moves image references out of the returned value', async () => {
+  const result = await run(
+    "return { text: 'hi', images: [{ id: 'F123', name: 'shot.png', mimetype: 'image/png' }] };",
+  );
+  assert.deepEqual(result.images, [{ id: 'F123', name: 'shot.png', mimetype: 'image/png' }]);
+  assert.equal(result.value, '{"text":"hi"}');
+});
+
+test('keeps invalid image references as ordinary data', async () => {
+  const result = await run("return { text: 'hi', images: [{ id: 'nope' }] };");
+  assert.equal(result.images, undefined);
+  assert.match(result.value, /"images":\[\{"id":"nope"\}\]/);
+});
+
+test('attaches images from an action even when the result is summarized', async () => {
+  const host = async () =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        value: {
+          count: 31,
+          images: [{ id: 'F123', name: 'shot.png', mimetype: 'image/png' }],
+        },
+      }),
+    );
+
+  const result = await run(
+    `const thread = await app.thread('C12345678', '1699999999.000000', 50, { images: true });
+     return { count: thread.count };`,
+    host,
+  );
+  assert.deepEqual(result.images, [{ id: 'F123', name: 'shot.png', mimetype: 'image/png' }]);
+  assert.equal(result.value, '{"count":31}');
+});

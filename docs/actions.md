@@ -197,6 +197,24 @@ return await app.thread("#oncall", "1699999999.000000", 50, { format: "json" });
 
 `limit` is clamped to 1–200 and defaults to 50. When `has_more` is `true`, pass `next_cursor` to a raw `slack.conversations.replies` call.
 
+To see images in the thread, pass `images: true`:
+
+```js
+return await app.thread("#incident", "1699999999.000000", 50, { images: true });
+```
+
+The host attaches up to four images from the thread to the tool result as MCP image blocks. It prefers Slack thumbnails, caps each image at 2 MB, and downloads with the stored token. The guest never sees the image bytes or the private file URL. This works even if your code returns a summary, not the thread object.
+
+Code Mode clients that drop image blocks still get a fallback. The host writes each image to a private temporary file and adds a line to the text:
+
+```text
+[image: /var/folders/.../slack-codemode-images-abc/1793686093881-dcebd3f69c8d.png]
+```
+
+Read that path with your file reader to view the image. Files are mode 0600 in a 0700 directory, evicted oldest-first past 40 files or 50 MB, and removed when the server exits.
+
+Images require an MCP client and model that support image content, or a reader tool that can open the fallback path. A text-only client without a file reader ignores both.
+
 ### `app.readLink(url, options)`
 
 Reads a message from a Slack permalink. If the message has a thread, the whole thread is returned.
@@ -205,7 +223,7 @@ Reads a message from a Slack permalink. If the message has a thread, the whole t
 return await app.readLink("https://workspace.slack.com/archives/C123ABC/p1699999999000000");
 ```
 
-The result uses the same condensed `text` as `app.thread`, plus `ts` and `thread_ts`. Pass `{ format: "json" }` for structured messages. JSON messages also include `is_thread_parent`.
+The result uses the same condensed `text` as `app.thread`, plus `ts` and `thread_ts`. Pass `{ format: "json" }` for structured messages. JSON messages also include `is_thread_parent`. Pass `{ images: true }` to attach up to four images from the message or thread.
 
 The result includes `has_more`.
 
@@ -374,6 +392,7 @@ Actions reject bad input before calling Slack. This saves a round trip and gives
 | Message text | At most 40,000 characters |
 | Canvas markdown | At most 60,000 characters |
 | Uploads | At most 20 MiB |
+| Thread images | At most 4, 2 MB each |
 
 Each bridge call is also capped at 64 KiB. Large markdown or blocks can exceed that. Split the work if you see `request_too_large`.
 

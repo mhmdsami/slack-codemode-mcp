@@ -97,6 +97,16 @@ The upload URL returned by Slack is checked before any bytes are sent. It must b
 
 A broad upload root weakens this boundary. Keep it narrow.
 
+### Image downloads
+
+`app.thread` and `app.readLink` can attach images when called with `images: true`. The guest returns only file ids and mime types.
+
+The host resolves each id with `files.info`, rejects anything that is not PNG, JPEG, GIF, or WebP, rejects files over 2 MB, and downloads only from `slack.com` or `slack-files.com` hosts. The token is added by the host. URLs and image bytes never enter the guest, and the guest cannot ask the host to fetch an arbitrary URL.
+
+At most four images are attached per execution.
+
+Image blocks do not survive every Code Mode client. As a fallback, the host also writes each image to a private temporary file: mode 0600 in a 0700 directory, keyed by random name. The path is appended to the text as `[image: /path]`. The store keeps at most 40 files or 50 MB, evicts oldest-first, and removes the directory when the server exits. The path is readable by the user and by local file-reading tools; it is not sent anywhere else.
+
 ### Denial of service
 
 Execution has a wall deadline and a CPU budget. celld enforces `cpuMs`, and the host aborts the HTTP request at the deadline.

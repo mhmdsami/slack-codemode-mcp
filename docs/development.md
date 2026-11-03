@@ -44,6 +44,7 @@ What they cover:
 - search filtering, unindexed allowlisted methods, and rendering
 - action input validation and page limits
 - condensed thread transcripts and Slack text rendering
+- image reference collection, attachment, and the private file fallback
 - canvas edit validation, share threads, and section filters
 - cache freshness, expiry, and eviction
 - token resolution from the environment

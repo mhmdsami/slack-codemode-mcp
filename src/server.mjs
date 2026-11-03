@@ -5,6 +5,8 @@ import { createActions } from './actions/index.mjs';
 import { createCache } from './cache.mjs';
 import { LIMITS, readAllowlist, readIndex, VERSION } from './config.mjs';
 import { resolveCredentials } from './credentials.mjs';
+import { createImageStore } from './image-store.mjs';
+import { imageBlocks } from './images.mjs';
 import { CelldRuntime } from './runtime/celld.mjs';
 import { createSearch } from './search.mjs';
 import { createSlackClient } from './slack/client.mjs';
@@ -113,6 +115,7 @@ export async function main() {
   const actions = createActions({ slack, cache, limits: LIMITS });
   const search = createSearch({ index, allowed });
   const runtime = createRuntimeManager({ allowed, slack, actions });
+  const imageStore = createImageStore();
 
   let shuttingDown = false;
 
@@ -122,6 +125,7 @@ export async function main() {
     const timer = setTimeout(() => process.exit(0), LIMITS.shutdownMs + 3000);
     timer.unref();
     await runtime.stop().catch(() => {});
+    imageStore.close();
     clearTimeout(timer);
     process.exit(0);
   }
@@ -131,7 +135,10 @@ export async function main() {
   }
   process.stdin.on('close', shutdown);
   process.stdin.on('end', shutdown);
-  process.on('exit', () => runtime.stopSync());
+  process.on('exit', () => {
+    runtime.stopSync();
+    imageStore.close();
+  });
 
   const server = new McpServer(
     { name: 'Slack Codemode MCP', version: VERSION },
@@ -273,9 +280,27 @@ export async function main() {
       }
 
       const formatted = formatExecution(payload);
+      let text = formatted.text;
+      const content = [{ type: 'text', text }];
+      if (!formatted.isError && Array.isArray(payload.images) && payload.images.length > 0) {
+        try {
+          const { blocks, paths, skipped } = await imageBlocks(payload.images, {
+            slack,
+            store: imageStore,
+          });
+          content.push(...blocks);
+          if (paths.length > 0) {
+            text += `\n${paths.map((path) => `[image: ${path}]`).join('\n')}`;
+          }
+          if (skipped > 0) {
+            text += `\n[${skipped} image(s) unavailable]`;
+          }
+          content[0] = { type: 'text', text };
+        } catch {}
+      }
       return {
         ...(formatted.isError ? { isError: true } : {}),
-        content: [{ type: 'text', text: formatted.text }],
+        content,
       };
     },
   );

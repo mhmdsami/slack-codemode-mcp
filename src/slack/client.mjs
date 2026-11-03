@@ -276,5 +276,47 @@ export function createSlackClient(getAuth, options = {}) {
     throw new SlackError('Slack request failed after retries.');
   }
 
-  return { call };
+  async function download(url, maxBytes = 2 * 1024 * 1024) {
+    let auth = normalizeAuth(getAuth());
+    if (!auth?.accessToken) {
+      throw new SlackError('SLACK_USER_TOKEN is not configured. Run `npm run auth`.', {
+        code: 'not_configured',
+      });
+    }
+    if (credentialsNeedRefresh(auth)) {
+      auth = await refresh(auth);
+    }
+
+    const response = await fetchFn(url, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(requestTimeoutMs),
+    });
+    if (!response.ok || !response.body) {
+      throw new SlackError(`File download failed with HTTP ${response.status}`, {
+        code: 'download_failed',
+      });
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => {});
+          return null;
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+  }
+
+  return { call, download };
 }

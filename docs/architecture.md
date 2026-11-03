@@ -79,6 +79,8 @@ The worker checks the runtime secret and the request shape. It then loads the is
 
 The execution record is removed in a `finally`. A late or forged bridge call cannot reuse it.
 
+Actions can also return image references. The host resolves each id with `files.info`, downloads a thumbnail with the token, and appends MCP image blocks after the text. It also writes a private temporary copy and adds its path to the text, for clients that drop image blocks. The bytes never enter the guest or the bridge.
+
 ## Caching
 
 Users, channels, DM channels, and resolved names are cached in the host for ten minutes.

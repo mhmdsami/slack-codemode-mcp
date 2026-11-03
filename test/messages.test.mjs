@@ -330,3 +330,68 @@ test('readLink returns a condensed transcript by default', async () => {
   assert.match(result.text, /Jane: parent/);
   assert.match(result.text, /Jane: reply > ok/);
 });
+
+test('thread can return image references for the host to attach', async () => {
+  const actions = createMessageActions({
+    slack: {
+      call: async () => ({
+        messages: [
+          {
+            ts: '1.000000',
+            user: 'U1',
+            text: 'look',
+            files: [
+              { id: 'F1', name: 'shot.png', mimetype: 'image/png' },
+              { id: 'F2', name: 'notes.txt', mimetype: 'text/plain' },
+            ],
+          },
+        ],
+      }),
+    },
+    cache: cache(),
+    users: { namesFor: async () => new Map([['U1', 'Jane']]) },
+    channels: {},
+  });
+
+  const withImages = await actions.thread({
+    channel: 'C12345678',
+    ts: '1699999999.000000',
+    images: true,
+  });
+  assert.deepEqual(withImages.images, [{ id: 'F1', name: 'shot.png', mimetype: 'image/png' }]);
+
+  const withoutImages = await actions.thread({
+    channel: 'C12345678',
+    ts: '1699999999.000000',
+  });
+  assert.equal(withoutImages.images, undefined);
+});
+
+test('readLink can return image references', async () => {
+  const actions = createMessageActions({
+    slack: {
+      call: async (method) => {
+        if (method !== 'conversations.replies') throw new Error(`unexpected ${method}`);
+        return {
+          messages: [
+            {
+              ts: '1699999999.000000',
+              user: 'U1',
+              text: 'screenshot',
+              files: [{ id: 'F1', name: 'shot.png', mimetype: 'image/png' }],
+            },
+          ],
+        };
+      },
+    },
+    cache: cache(),
+    users: { namesFor: async () => new Map([['U1', 'Jane']]) },
+    channels: {},
+  });
+
+  const result = await actions.readLink({
+    url: 'https://x.slack.com/archives/C12345678/p1699999999000000?thread_ts=1699999999.000000',
+    images: true,
+  });
+  assert.deepEqual(result.images, [{ id: 'F1', name: 'shot.png', mimetype: 'image/png' }]);
+});
