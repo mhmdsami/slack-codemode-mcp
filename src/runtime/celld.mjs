@@ -217,7 +217,7 @@ export class CelldRuntime {
       await rm(appDirectory, { recursive: true, force: true }).catch(() => {});
       if (error?.code === 'ENOENT') {
         throw new Error(
-          `celld was not found. Install celld v0.6.2 and put it on PATH, or set SLACK_CODEMODE_CELLD_BIN.\n(${errorMessage(error)})`,
+          `celld was not found. Install celld v0.6.2 or newer and put it on PATH, or set SLACK_CODEMODE_CELLD_BIN.\n(${errorMessage(error)})`,
         );
       }
       throw new Error(`celld did not start: ${errorMessage(error)}`);

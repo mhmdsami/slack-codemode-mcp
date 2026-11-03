@@ -4,7 +4,7 @@
 
 ### `celld was not found`
 
-celld is a separate binary. Install v0.6.2 and put it on `PATH`, or point the server at it:
+celld is a separate binary. Install v0.6.2 or newer and put it on `PATH`, or point the server at it:
 
 ```bash
 SLACK_CODEMODE_CELLD_BIN="$HOME/.local/bin/celld" node mcp/server.mjs

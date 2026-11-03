@@ -15,7 +15,7 @@ The guest isolate never sees the Slack token. Calls go through a service binding
 ## Requirements
 
 - Node.js 20.12 or newer
-- [celld](https://github.com/denoland/celld) v0.6.2 on `PATH` (macOS arm64 and Linux; Windows is not supported)
+- [celld](https://github.com/denoland/celld) v0.6.2 or newer on `PATH` (macOS arm64 and Linux; Windows is not supported)
 - A Slack internal app with PKCE enabled
 
 ## Install

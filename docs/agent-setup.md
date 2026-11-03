@@ -6,7 +6,7 @@ Instructions for a coding agent asked to install and register Slack Code Mode MC
 
 - macOS arm64 or Linux. Windows is not supported.
 - Node.js 20.12 or newer.
-- celld v0.6.2 on `PATH`.
+- celld v0.6.2 or newer on `PATH`.
 - This repository checked out locally.
 
 ```bash
@@ -148,7 +148,7 @@ Expect the authenticated user and workspace. If the tool is not listed, restart 
 
 | Symptom | Action |
 |---|---|
-| `celld was not found` | Ask the human to install celld v0.6.2 or set `SLACK_CODEMODE_CELLD_BIN`. |
+| `celld was not found` | Ask the human to install celld v0.6.2 or newer, or set `SLACK_CODEMODE_CELLD_BIN`. |
 | `missing_scope` | Human adds the scope, then `npm run auth`. |
 | `invalid_arguments` | The client retries form-encoded automatically; report the method and arguments. |
 | `ratelimited` | Wait for the retry window; prefer `app.findUser` over directory scans. |

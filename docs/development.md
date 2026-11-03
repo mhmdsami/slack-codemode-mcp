@@ -7,7 +7,7 @@ npm ci
 npx lefthook install
 ```
 
-You need Node 20.12 or newer. celld v0.6.2 is only needed to run the server, not for tests or linting.
+You need Node 20.12 or newer. celld v0.6.2 or newer is only needed to run the server, not for tests or linting.
 
 ## Scripts
 
