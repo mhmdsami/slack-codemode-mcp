@@ -237,16 +237,13 @@ npm run doctor
 npm run generate
 ```
 
-`gate` runs Biome and the unit tests. CI runs the same command.
-
-Lefthook runs Biome and the tests on commit, and the full gate on push:
+`gate` runs Biome and the unit tests. The pre-commit hook runs the same command,
+and a manual-only `.github/workflows/ci.yml` runs it on demand:
 
 ```bash
 npm install
 npx lefthook install
 ```
-
-CI runs the gate on Ubuntu and macOS. See [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Docs
 
