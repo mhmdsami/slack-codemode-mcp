@@ -2,61 +2,47 @@
 
 This server is distributed through GitHub Releases. Each release provides a package tarball and `SHA256SUMS`.
 
-There is no npm registry package. npm is used only to install the downloaded tarball.
+There is no npm registry package.
 
 ## Requirements
 
 - Node.js 20.12 or newer
+- bash, npm, curl, tar, gunzip, and mktemp
 - celld 0.6.2 or newer
 - macOS arm64, Linux x86_64, or Linux arm64
 - A Slack internal app with PKCE enabled
 
-Windows and macOS x64 are not supported, because celld does not publish binaries for them.
+Windows and macOS x64 are not supported because celld does not publish binaries for them.
 
-## Quick install
+## Install with the script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh | bash
 ```
 
-The installer:
+This installs the latest release into `~/.local` without sudo. The installer:
 
-- checks Node.js 20.12 or newer and npm
-- downloads the latest GitHub release tarball and verifies `SHA256SUMS`
-- installs into `~/.local` without sudo
-- installs celld for macOS arm64, Linux x86_64, or Linux arm64 if it is missing or older than 0.6.2
+- checks Node.js, npm, curl, tar, gunzip, and mktemp
+- downloads the release tarball and verifies `SHA256SUMS`
+- installs celld for the supported platform when needed, after verifying the upstream asset digest
 - leaves `~/.config/slack-codemode` unchanged
 
 Add `$HOME/.local/bin` to `PATH` if the installer says it is missing.
 
-Install a pinned version:
+Pin a release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
   | bash -s -- --version 1.0.0
 ```
 
-Choose a different prefix:
+Choose a different prefix with `--prefix <dir>`. The default is `~/.local`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
-  | bash -s -- --prefix "$HOME/.local"
-```
+Use the full path to the installed server when registering it.
 
-The same options are available as environment variables:
+## Manual install
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
-  | INSTALL_VERSION=1.0.0 SLACK_CODEMODE_PREFIX="$HOME/.local" bash
-```
-
-The installer is served from the repository and installs release assets. It does not modify releases or tags.
-
-If you prefer to verify every step yourself, use the manual download below.
-
-## Download the release
-
-Set the release version and download both assets:
+Use this path if you want to verify each step.
 
 ```bash
 VERSION=1.0.0
@@ -79,131 +65,34 @@ On Linux:
 sha256sum -c SHA256SUMS
 ```
 
-Replace `1.0.0` with the release version you want.
-
-## Install
-
-### Global install, recommended
-
-```bash
-npm install -g "./slack-codemode-mcp-$VERSION.tgz"
-```
-
-```bash
-slack-codemode-mcp --version
-```
-
-The package provides three commands:
-
-```text
-slack-codemode-mcp      the MCP server
-slack-codemode-auth     Slack authorization
-slack-codemode-doctor   token and scope check
-```
-
-If `npm install -g` fails with `EACCES`, use a Node version manager or set a user prefix:
-
-```bash
-npm config set prefix "$HOME/.local"
-```
-
-Make sure `$HOME/.local/bin` is on `PATH`.
-
-### Local install, no global npm
-
-Extract the package and install its runtime dependencies:
+Extract and install the runtime dependencies:
 
 ```bash
 INSTALL_DIR="$HOME/tools/slack-codemode-mcp"
 mkdir -p "$INSTALL_DIR"
 tar -xzf "slack-codemode-mcp-$VERSION.tgz" -C "$INSTALL_DIR" --strip-components=1
 (cd "$INSTALL_DIR" && npm install --omit=dev)
-```
-
-```bash
 node "$INSTALL_DIR/mcp/server.mjs" --version
 ```
 
-Use the `node` paths for auth and doctor:
-
-```bash
-node "$INSTALL_DIR/scripts/auth.mjs"
-node "$INSTALL_DIR/scripts/check.mjs"
-```
-
-Use this form when you cannot or do not want a global npm install.
-
-## Install celld
-
-celld is a separate binary. Download the asset for your platform from:
-
-<https://github.com/denoland/celld/releases>
-
-Current assets:
-
-```text
-celld-aarch64-apple-darwin.gz       macOS arm64
-celld-x86_64-unknown-linux-gnu.gz   Linux x86_64
-celld-aarch64-unknown-linux-gnu.gz  Linux arm64
-```
-
-### macOS arm64
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -L -o /tmp/celld.gz \
-  https://github.com/denoland/celld/releases/download/v0.6.3/celld-aarch64-apple-darwin.gz
-gunzip -c /tmp/celld.gz > "$HOME/.local/bin/celld"
-chmod +x "$HOME/.local/bin/celld"
-celld --version
-```
-
-### Linux x86_64
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -L -o /tmp/celld.gz \
-  https://github.com/denoland/celld/releases/download/v0.6.3/celld-x86_64-unknown-linux-gnu.gz
-gunzip -c /tmp/celld.gz > "$HOME/.local/bin/celld"
-chmod +x "$HOME/.local/bin/celld"
-celld --version
-```
-
-### Linux arm64
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -L -o /tmp/celld.gz \
-  https://github.com/denoland/celld/releases/download/v0.6.3/celld-aarch64-unknown-linux-gnu.gz
-gunzip -c /tmp/celld.gz > "$HOME/.local/bin/celld"
-chmod +x "$HOME/.local/bin/celld"
-celld --version
-```
-
-If `celld --version` is not found, add `$HOME/.local/bin` to `PATH`.
-
-If `celld` is not on `PATH`, point the server at it:
-
-```bash
-export SLACK_CODEMODE_CELLD_BIN="$HOME/.local/bin/celld"
-```
+The manual path does not install celld. Use the installer, or install celld from <https://github.com/denoland/celld/releases>. If `celld` is not on `PATH`, set `SLACK_CODEMODE_CELLD_BIN` to its absolute path.
 
 ## Configure the Slack app
 
 1. Create an internal app at <https://api.slack.com/apps>.
-2. Open **OAuth & Permissions** and enable **PKCE**. This cannot be undone.
+2. Open **OAuth & Permissions** and enable **PKCE**.
 3. Add the redirect URL `http://localhost:33417/callback`.
 4. Add the user token scopes.
 
-Print the scope list.
+Print the scopes.
 
-Global install:
+Script install:
 
 ```bash
 slack-codemode-auth --scopes
 ```
 
-Local install:
+Manual install:
 
 ```bash
 node "$INSTALL_DIR/scripts/auth.mjs" --scopes
@@ -213,7 +102,7 @@ Add those scopes under **User Token Scopes**, then install or reinstall the app.
 
 ## Configure the client ID
 
-The Client ID is public. Set it in the environment:
+Set it in the environment:
 
 ```bash
 export SLACK_CLIENT_ID=your-client-id
@@ -227,233 +116,104 @@ printf 'SLACK_CLIENT_ID=%s\n' 'your-client-id' > "$HOME/.config/slack-codemode/.
 chmod 600 "$HOME/.config/slack-codemode/.env"
 ```
 
-The environment variable wins. A `.env` in the package root is used for a source or local install; otherwise `~/.config/slack-codemode/.env` is used.
+The environment variable wins.
 
 ## Authenticate
 
-Global install:
+Script install:
 
 ```bash
 slack-codemode-auth
 ```
 
-Local install:
+Manual install:
 
 ```bash
 node "$INSTALL_DIR/scripts/auth.mjs"
 ```
 
-A browser opens. Approve the app and return to the terminal.
+Approve the app in the browser and return to the terminal.
 
-Useful flags:
-
-```bash
-slack-codemode-auth --dry-run   # print the authorize URL and exit
-slack-codemode-auth --no-open   # print the URL without opening a browser
-```
-
-For the local install, pass the same flags to `scripts/auth.mjs`.
-
-Use a different callback port:
+To print the authorize URL without starting the browser:
 
 ```bash
-SLACK_OAUTH_PORT=34567 slack-codemode-auth
+slack-codemode-auth --dry-run
 ```
-
-The token bundle is stored in:
-
-```text
-~/.config/slack-codemode/token
-```
-
-It is written with mode 0600. Rotating tokens refresh automatically.
 
 ## Verify
 
-Global install:
+Script install:
 
 ```bash
 slack-codemode-doctor
 ```
 
-Local install:
+Manual install:
 
 ```bash
 node "$INSTALL_DIR/scripts/check.mjs"
 ```
 
-Every line should be `✓`.
-
-`channel_not_found`, `user_not_found`, and `canvas_not_found` count as passes. The scope worked and the fixture does not exist.
+Run this after authentication.
 
 ## Register the server
 
-Global install, resolve the command:
+For the script install:
 
 ```bash
 command -v slack-codemode-mcp
 ```
 
-Use that path in your MCP client.
-
-Local install, use:
+For the manual install, use:
 
 ```text
 node /absolute/path/to/slack-codemode-mcp/mcp/server.mjs
 ```
 
-### Claude Code
-
-Global:
-
-```bash
-claude mcp add --scope user slack-codemode-mcp -- "$(command -v slack-codemode-mcp)"
-```
-
-Local:
-
-```bash
-claude mcp add --scope user slack-codemode-mcp -- node "$INSTALL_DIR/mcp/server.mjs"
-```
-
-### Codex
-
-Global:
-
-```bash
-codex mcp add slack-codemode-mcp -- "$(command -v slack-codemode-mcp)"
-```
-
-Local:
-
-```bash
-codex mcp add slack-codemode-mcp -- node "$INSTALL_DIR/mcp/server.mjs"
-```
-
-### OpenCode
-
-Global:
-
-```bash
-opencode mcp add slack-codemode-mcp --global -- "$(command -v slack-codemode-mcp)"
-```
-
-Local:
-
-```bash
-opencode mcp add slack-codemode-mcp --global -- node "$INSTALL_DIR/mcp/server.mjs"
-```
-
-### Zed
-
-Add this to `~/.config/zed/settings.json`:
-
-```jsonc
-"context_servers": {
-  "slack-codemode-mcp": {
-    "command": "/absolute/path/from/command -v",
-    "args": []
-  }
-}
-```
-
-Restart the client. MCP configuration is read at startup.
-
-## Smoke test
-
-Ask the agent to run this through the MCP:
-
-```js
-return await app.whoami();
-```
-
-Expect your user and workspace.
+Give that path to your MCP client and restart it. The README has client examples.
 
 ## Upgrade
 
-The simplest upgrade is to rerun the installer. It installs the latest release and skips celld when the existing version is new enough:
+Rerun the installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh | bash
 ```
 
-Pin the upgrade:
+Pin a version:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
-  | bash -s -- --version 1.0.1
+  | bash -s -- --version <version>
 ```
 
-Your token and config live in `~/.config/slack-codemode` and survive upgrades.
+Your config and token in `~/.config/slack-codemode` are preserved. Restart the MCP client afterward.
 
-To upgrade manually, download the new tarball and checksums, then verify them the same way.
-
-Global install:
-
-```bash
-VERSION=1.0.1
-BASE="https://github.com/mhmdsami/slack-codemode-mcp/releases/download/v$VERSION"
-curl -LO "$BASE/slack-codemode-mcp-$VERSION.tgz"
-curl -LO "$BASE/SHA256SUMS"
-shasum -a 256 -c SHA256SUMS
-npm install -g "./slack-codemode-mcp-$VERSION.tgz"
-slack-codemode-mcp --version
-slack-codemode-doctor
-```
-
-Local install:
-
-```bash
-VERSION=1.0.1
-BASE="https://github.com/mhmdsami/slack-codemode-mcp/releases/download/v$VERSION"
-curl -LO "$BASE/slack-codemode-mcp-$VERSION.tgz"
-curl -LO "$BASE/SHA256SUMS"
-shasum -a 256 -c SHA256SUMS
-rm -rf "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR"
-tar -xzf "slack-codemode-mcp-$VERSION.tgz" -C "$INSTALL_DIR" --strip-components=1
-(cd "$INSTALL_DIR" && npm install --omit=dev)
-node "$INSTALL_DIR/mcp/server.mjs" --version
-node "$INSTALL_DIR/scripts/check.mjs"
-```
-
-Use `sha256sum -c` instead of `shasum` on Linux.
-
-Restart the MCP client so it loads the new server.
-
-Your token and config live in `~/.config/slack-codemode` and survive upgrades.
+For a manual install, repeat the manual steps with the new version.
 
 ## Uninstall
 
-Global install:
+Script install:
 
 ```bash
-npm uninstall -g slack-codemode-mcp
+npm uninstall -g --prefix "$HOME/.local" slack-codemode-mcp
+rm -f "$HOME/.local/bin/celld"
 ```
 
-Local install:
+Use the prefix you chose if it was not `~/.local`.
+
+Manual install:
 
 ```bash
 rm -rf "$HOME/tools/slack-codemode-mcp"
 ```
 
-The token is not removed. To delete it:
+The config and token are not removed. To delete them:
 
 ```bash
 rm -rf "$HOME/.config/slack-codemode"
 ```
 
-Also revoke the app in Slack under **Manage apps** if you want to invalidate the token remotely.
-
-celld is separate. Remove `~/.local/bin/celld` if no other tool uses it.
-
 ## Troubleshooting
 
-- [Troubleshooting](docs/troubleshooting.md)
-- `celld was not found`: install celld or set `SLACK_CODEMODE_CELLD_BIN`.
-- `missing_scope`: add the scope, then re-run the auth command.
-- The server is missing in Claude: add it with `--scope user` and restart the session.
-
-## Distribution status
-
-GitHub Releases is the only distribution channel. The curl installer is served from the repository and installs release assets. There is no npm registry package. Docker images and standalone bundles are not available yet.
+See [Troubleshooting](docs/troubleshooting.md).
