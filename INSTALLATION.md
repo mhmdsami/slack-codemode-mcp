@@ -13,6 +13,47 @@ There is no npm registry package. npm is used only to install the downloaded tar
 
 Windows and macOS x64 are not supported, because celld does not publish binaries for them.
 
+## Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh | bash
+```
+
+The installer:
+
+- checks Node.js 20.12 or newer and npm
+- downloads the latest GitHub release tarball and verifies `SHA256SUMS`
+- installs into `~/.local` without sudo
+- installs celld for macOS arm64, Linux x86_64, or Linux arm64 if it is missing or older than 0.6.2
+- leaves `~/.config/slack-codemode` unchanged
+
+Add `$HOME/.local/bin` to `PATH` if the installer says it is missing.
+
+Install a pinned version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
+  | bash -s -- --version 1.0.0
+```
+
+Choose a different prefix:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
+  | bash -s -- --prefix "$HOME/.local"
+```
+
+The same options are available as environment variables:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
+  | INSTALL_VERSION=1.0.0 SLACK_CODEMODE_PREFIX="$HOME/.local" bash
+```
+
+The installer is served from the repository and installs release assets. It does not modify releases or tags.
+
+If you prefer to verify every step yourself, use the manual download below.
+
 ## Download the release
 
 Set the release version and download both assets:
@@ -330,7 +371,22 @@ Expect your user and workspace.
 
 ## Upgrade
 
-Download the new tarball and checksums, then verify them the same way.
+The simplest upgrade is to rerun the installer. It installs the latest release and skips celld when the existing version is new enough:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh | bash
+```
+
+Pin the upgrade:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mhmdsami/slack-codemode-mcp/main/install.sh \
+  | bash -s -- --version 1.0.1
+```
+
+Your token and config live in `~/.config/slack-codemode` and survive upgrades.
+
+To upgrade manually, download the new tarball and checksums, then verify them the same way.
 
 Global install:
 
@@ -400,4 +456,4 @@ celld is separate. Remove `~/.local/bin/celld` if no other tool uses it.
 
 ## Distribution status
 
-GitHub Releases is the only distribution channel. There is no npm registry package. Docker images and standalone bundles are not available yet.
+GitHub Releases is the only distribution channel. The curl installer is served from the repository and installs release assets. There is no npm registry package. Docker images and standalone bundles are not available yet.
