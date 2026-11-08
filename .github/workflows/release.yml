@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing tag to publish, e.g. v0.5.0"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || github.event.inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve and verify the tag
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.version }}
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            TAG="$PUSH_TAG"
+          else
+            TAG="$INPUT_TAG"
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          test -n "$TAG" || { echo "A tag is required."; exit 1; }
+          test "$TAG" = "v$VERSION" || {
+            echo "Tag $TAG does not match package version $VERSION."
+            exit 1
+          }
+          git rev-parse "$TAG" >/dev/null
+          if [[ "$VERSION" == *-* ]]; then DIST_TAG=next; else DIST_TAG=latest; fi
+          {
+            echo "TAG=$TAG"
+            echo "VERSION=$VERSION"
+            echo "DIST_TAG=$DIST_TAG"
+          } >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - run: npm run gate
+
+      - name: Check the API index is current
+        run: |
+          cp api-index.json /tmp/api-index-before.json
+          npm run generate
+          node -e "
+            const fs = require('fs');
+            const strip = (path) => {
+              const value = JSON.parse(fs.readFileSync(path, 'utf8'));
+              delete value.generatedAt;
+              return JSON.stringify(value);
+            };
+            if (strip('api-index.json') !== strip('/tmp/api-index-before.json')) {
+              console.error('api-index.json is stale; run npm run generate and commit it.');
+              process.exit(1);
+            }
+          "
+          git checkout -- api-index.json
+
+      - name: Pack and inspect
+        run: |
+          npm pack
+          TARBALL="slack-codemode-mcp-${VERSION}.tgz"
+          test -f "$TARBALL"
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
+          tar -tzf "$TARBALL" > /tmp/contents.txt
+
+          for path in \
+            package/mcp/server.mjs \
+            package/src/server.mjs \
+            package/celld/guest.js \
+            package/allowlist.json \
+            package/api-index.json \
+            package/scripts/auth.mjs \
+            package/scripts/check.mjs \
+            package/INSTALLATION.md; do
+            grep -qx "$path" /tmp/contents.txt || {
+              echo "Missing $path from the package."
+              exit 1
+            }
+          done
+
+          if grep -qE '^package/(test/|\.github/|\.env$|AGENTS\.md|biome\.json|lefthook\.yml)' /tmp/contents.txt; then
+            echo "Unexpected files in the package."
+            exit 1
+          fi
+
+          tar -tvzf "$TARBALL" | grep 'package/mcp/server.mjs' | grep -q '^-rwx' || {
+            echo "mcp/server.mjs is not executable in the package."
+            exit 1
+          }
+
+          sha256sum "$TARBALL" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view "slack-codemode-mcp@$VERSION" version >/dev/null 2>&1; then
+            echo "slack-codemode-mcp@$VERSION is already published; skipping."
+          else
+            npm publish --provenance --access public --tag "$DIST_TAG"
+          fi
+
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$TARBALL" SHA256SUMS --clobber
+          else
+            PRERELEASE=""
+            if [[ "$VERSION" == *-* ]]; then PRERELEASE="--prerelease"; fi
+            gh release create "$TAG" "$TARBALL" SHA256SUMS \
+              --verify-tag \
+              --title "$TAG" \
+              --generate-notes \
+              $PRERELEASE
+          fi

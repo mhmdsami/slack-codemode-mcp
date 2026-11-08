@@ -1,5 +1,7 @@
 # Troubleshooting
 
+The commands below use the source checkout (`npm run auth`, `npm run doctor`). If you installed from npm, use `slack-codemode-auth` and `slack-codemode-doctor` instead.
+
 ## Setup
 
 ### `celld was not found`

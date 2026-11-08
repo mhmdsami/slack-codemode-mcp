@@ -1,10 +1,29 @@
 {
   "name": "slack-codemode-mcp",
-  "version": "0.4.0",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
   "type": "module",
   "bin": {
-    "slack-codemode-mcp": "./mcp/server.mjs"
+    "slack-codemode-mcp": "./mcp/server.mjs",
+    "slack-codemode-auth": "./scripts/auth.mjs",
+    "slack-codemode-doctor": "./scripts/check.mjs"
+  },
+  "files": [
+    "mcp/",
+    "src/",
+    "celld/",
+    "scripts/auth.mjs",
+    "scripts/check.mjs",
+    "docs/",
+    "allowlist.json",
+    "api-index.json",
+    "INSTALLATION.md",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "start": "node mcp/server.mjs",
@@ -15,7 +34,7 @@
     "lint": "biome check .",
     "test": "node --test",
     "gate": "biome check . && node --test",
-    "prepare": "lefthook install || true",
+    "prepublishOnly": "npm run gate",
     "scopes": "node scripts/auth.mjs --scopes"
   },
   "dependencies": {

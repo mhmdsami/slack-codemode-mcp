@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LIMITS } from '../src/config.mjs';
 import { openBrowser, storeCredentials } from '../src/credentials.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ENV_FILE = path.join(ROOT, '.env');
-if (fs.existsSync(ENV_FILE)) {
-  process.loadEnvFile(ENV_FILE);
-}
+const CONFIG_ENV = path.join(LIMITS.configDir, '.env');
+const ROOT_ENV = path.join(ROOT, '.env');
+const ENV_FILE = fs.existsSync(ROOT_ENV) ? ROOT_ENV : CONFIG_ENV;
+if (fs.existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 const REDIRECT_PORT = Number(process.env.SLACK_OAUTH_PORT ?? 33417);
 const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
 const DEFAULT_SCOPES = [
@@ -53,9 +54,11 @@ if (!clientId) {
     [
       'Missing Slack app credentials.',
       '',
-      `Create an internal app at https://api.slack.com/apps and put credentials in ${ENV_FILE}:`,
+      `Create an internal app at https://api.slack.com/apps and set SLACK_CLIENT_ID:`,
       '',
       '  SLACK_CLIENT_ID=...',
+      '',
+      `Put it in the environment, in ${CONFIG_ENV}, or in ${ROOT_ENV} when running from source.`,
       '',
       'PKCE must be enabled for the app (OAuth & Permissions). No client secret is needed.',
       '',

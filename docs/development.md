@@ -26,7 +26,7 @@ You need Node 20.12 or newer. celld v0.6.2 or newer is only needed to run the se
 
 Lefthook runs Biome and the unit tests on commit. It runs the full gate on push.
 
-Hooks are installed by `prepare` after `npm install`. To install them by hand:
+Install the hooks after `npm install`:
 
 ```bash
 npx lefthook install
@@ -90,7 +90,16 @@ The host is the only place that touches the token, the allowlist, and Slack.
 
 ## Release
 
-1. Update `version` in `package.json`.
+1. Bump `version` in `package.json` and commit it.
 2. Run `npm run gate`.
-3. Run `npm run generate` if the SDK changed.
-4. Commit, tag, and push.
+3. Run `npm run generate` if the SDK changed, then commit any change.
+4. Tag `v<version>` and push the tag.
+
+```bash
+git tag -a v1.0.0 -m "v1.0.0"
+git push origin v1.0.0
+```
+
+The tag starts `.github/workflows/release.yml`. It publishes the npm package and creates a GitHub Release with the package tarball, `SHA256SUMS`, and generated notes. The workflow can be re-run for the same tag after a partial publish; it skips the npm version if it already exists and uploads missing release assets.
+
+The repository needs an `NPM_TOKEN` secret with publish rights. The `release` environment can require manual approval.

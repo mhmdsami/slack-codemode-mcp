@@ -20,6 +20,16 @@ The guest isolate never sees the Slack token. Calls go through a service binding
 
 ## Install
 
+### From npm (recommended)
+
+```bash
+npm install -g slack-codemode-mcp
+```
+
+See [INSTALLATION.md](INSTALLATION.md) for celld, configuration, authentication, upgrades, and MCP registration without a source checkout.
+
+### From source (development)
+
 ```bash
 git clone https://github.com/mhmdsami/slack-codemode-mcp.git
 cd slack-codemode-mcp
@@ -43,6 +53,14 @@ export SLACK_CODEMODE_CELLD_BIN="$HOME/.local/bin/celld"
 3. Add the redirect URL `http://localhost:33417/callback`.
 4. Add the user token scopes the server expects.
 
+With a global install:
+
+```bash
+slack-codemode-auth --scopes
+```
+
+From a source checkout:
+
 ```bash
 npm run scopes
 ```
@@ -52,6 +70,8 @@ Use a user token, not a bot token. A user token posts as you and sees your chann
 PKCE is one-way. It makes the app a public client, so no client secret is distributed. Colleagues only need the same Client ID.
 
 ## Add the Client ID
+
+For a source checkout:
 
 ```bash
 cp .env.example .env
@@ -66,7 +86,17 @@ SLACK_CLIENT_ID=...
 
 The file is gitignored.
 
+For a global install, put the same value in `~/.config/slack-codemode/.env` or export `SLACK_CLIENT_ID`. See [INSTALLATION.md](INSTALLATION.md).
+
 ## Authenticate
+
+With a global install:
+
+```bash
+slack-codemode-auth
+```
+
+From a source checkout:
 
 ```bash
 npm run auth
@@ -77,12 +107,24 @@ This opens Slack, completes the PKCE exchange, and stores the token bundle in `~
 Check the token and scopes:
 
 ```bash
-npm run doctor
+slack-codemode-doctor
 ```
+
+From a source checkout, use `npm run doctor`.
 
 The checker calls one method per area and reports any missing scope.
 
 ## Register the server
+
+With a global install, use the installed command:
+
+```bash
+command -v slack-codemode-mcp
+```
+
+Pass that path to your harness. See [INSTALLATION.md](INSTALLATION.md) for commands for each client.
+
+The examples below are for a source checkout.
 
 Pick your harness.
 
@@ -237,8 +279,7 @@ npm run doctor
 npm run generate
 ```
 
-`gate` runs Biome and the unit tests. The pre-commit hook runs the same command,
-and a manual-only `.github/workflows/ci.yml` runs it on demand:
+`gate` runs Biome and the unit tests. CI runs it on Ubuntu and macOS. The pre-commit hook runs Biome and tests locally:
 
 ```bash
 npm install
@@ -247,6 +288,7 @@ npx lefthook install
 
 ## Docs
 
+- [Installation](INSTALLATION.md)
 - [Agent setup](docs/agent-setup.md)
 - [Architecture](docs/architecture.md)
 - [Authentication](docs/authentication.md)
