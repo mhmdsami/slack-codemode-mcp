@@ -100,6 +100,4 @@ git tag -a v1.0.0 -m "v1.0.0"
 git push origin v1.0.0
 ```
 
-The tag starts `.github/workflows/release.yml`. It publishes the npm package and creates a GitHub Release with the package tarball, `SHA256SUMS`, and generated notes. The workflow can be re-run for the same tag after a partial publish; it skips the npm version if it already exists and uploads missing release assets.
-
-The repository needs an `NPM_TOKEN` secret with publish rights. The `release` environment can require manual approval.
+The tag starts `.github/workflows/release.yml`. It runs the gate, packs the tarball, writes `SHA256SUMS`, and creates or updates the GitHub Release with generated notes. It can be re-run for the same tag; existing assets are replaced. No npm publish or repository secret is required.

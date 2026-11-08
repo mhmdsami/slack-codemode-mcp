@@ -1,7 +1,7 @@
 {
   "name": "slack-codemode-mcp",
   "version": "1.0.0",
-  "private": false,
+  "private": true,
   "type": "module",
   "bin": {
     "slack-codemode-mcp": "./mcp/server.mjs",
@@ -22,9 +22,6 @@
     "LICENSE",
     ".env.example"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "start": "node mcp/server.mjs",
     "auth": "node scripts/auth.mjs",
@@ -34,7 +31,6 @@
     "lint": "biome check .",
     "test": "node --test",
     "gate": "biome check . && node --test",
-    "prepublishOnly": "npm run gate",
     "scopes": "node scripts/auth.mjs --scopes"
   },
   "dependencies": {

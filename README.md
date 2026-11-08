@@ -20,13 +20,15 @@ The guest isolate never sees the Slack token. Calls go through a service binding
 
 ## Install
 
-### From npm (recommended)
+### From a release (recommended)
+
+There is no npm registry package. Download the tarball and `SHA256SUMS` from [GitHub Releases](https://github.com/mhmdsami/slack-codemode-mcp/releases), verify the checksum, then install the tarball:
 
 ```bash
-npm install -g slack-codemode-mcp
+npm install -g ./slack-codemode-mcp-1.0.0.tgz
 ```
 
-See [INSTALLATION.md](INSTALLATION.md) for celld, configuration, authentication, upgrades, and MCP registration without a source checkout.
+See [INSTALLATION.md](INSTALLATION.md) for the full release install, celld, configuration, authentication, upgrades, and MCP registration without a source checkout.
 
 ### From source (development)
 

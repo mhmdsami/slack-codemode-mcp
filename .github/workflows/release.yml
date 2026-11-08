@@ -6,12 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Existing tag to publish, e.g. v0.5.0"
+        description: "Existing tag to publish, e.g. v1.0.0"
         required: true
 
 permissions:
   contents: write
-  id-token: write
 
 concurrency:
   group: release-${{ github.event_name == 'push' && github.ref_name || github.event.inputs.version }}
@@ -20,7 +19,6 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +29,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - name: Resolve and verify the tag
         env:
@@ -51,11 +48,9 @@ jobs:
             exit 1
           }
           git rev-parse "$TAG" >/dev/null
-          if [[ "$VERSION" == *-* ]]; then DIST_TAG=next; else DIST_TAG=latest; fi
           {
             echo "TAG=$TAG"
             echo "VERSION=$VERSION"
-            echo "DIST_TAG=$DIST_TAG"
           } >> "$GITHUB_ENV"
 
       - run: npm ci
@@ -115,16 +110,6 @@ jobs:
 
           sha256sum "$TARBALL" > SHA256SUMS
           cat SHA256SUMS
-
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if npm view "slack-codemode-mcp@$VERSION" version >/dev/null 2>&1; then
-            echo "slack-codemode-mcp@$VERSION is already published; skipping."
-          else
-            npm publish --provenance --access public --tag "$DIST_TAG"
-          fi
 
       - name: Create or update the GitHub release
         env:

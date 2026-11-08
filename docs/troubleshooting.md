@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The commands below use the source checkout (`npm run auth`, `npm run doctor`). If you installed from npm, use `slack-codemode-auth` and `slack-codemode-doctor` instead.
+The commands below use the source checkout (`npm run auth`, `npm run doctor`). If you installed from a release tarball, use `slack-codemode-auth` and `slack-codemode-doctor` instead.
 
 ## Setup
 

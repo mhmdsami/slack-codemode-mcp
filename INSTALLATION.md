@@ -1,6 +1,8 @@
 # Installation
 
-This guide installs the published server. You do not need a source checkout.
+This server is distributed through GitHub Releases. Each release provides a package tarball and `SHA256SUMS`.
+
+There is no npm registry package. npm is used only to install the downloaded tarball.
 
 ## Requirements
 
@@ -11,25 +13,44 @@ This guide installs the published server. You do not need a source checkout.
 
 Windows and macOS x64 are not supported, because celld does not publish binaries for them.
 
-## Install the server
+## Download the release
 
-From npm:
+Set the release version and download both assets:
 
 ```bash
-npm install -g slack-codemode-mcp
+VERSION=1.0.0
+BASE="https://github.com/mhmdsami/slack-codemode-mcp/releases/download/v$VERSION"
+curl -LO "$BASE/slack-codemode-mcp-$VERSION.tgz"
+curl -LO "$BASE/SHA256SUMS"
+```
+
+Verify the checksum.
+
+On macOS:
+
+```bash
+shasum -a 256 -c SHA256SUMS
+```
+
+On Linux:
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+Replace `1.0.0` with the release version you want.
+
+## Install
+
+### Global install, recommended
+
+```bash
+npm install -g "./slack-codemode-mcp-$VERSION.tgz"
 ```
 
 ```bash
 slack-codemode-mcp --version
 ```
-
-Check the package without installing it:
-
-```bash
-npx slack-codemode-mcp@latest --version
-```
-
-Use a global install for MCP registration. The npx cache path changes between versions.
 
 The package provides three commands:
 
@@ -47,34 +68,29 @@ npm config set prefix "$HOME/.local"
 
 Make sure `$HOME/.local/bin` is on `PATH`.
 
-## Install from a release tarball
+### Local install, no global npm
 
-Download the tarball and checksums from GitHub Releases, then verify. Replace `1.0.0` with the release version:
-
-```bash
-TAG=v1.0.0
-curl -LO "https://github.com/mhmdsami/slack-codemode-mcp/releases/download/$TAG/slack-codemode-mcp-1.0.0.tgz"
-curl -LO "https://github.com/mhmdsami/slack-codemode-mcp/releases/download/$TAG/SHA256SUMS"
-```
-
-On macOS:
+Extract the package and install its runtime dependencies:
 
 ```bash
-shasum -a 256 -c SHA256SUMS
+INSTALL_DIR="$HOME/tools/slack-codemode-mcp"
+mkdir -p "$INSTALL_DIR"
+tar -xzf "slack-codemode-mcp-$VERSION.tgz" -C "$INSTALL_DIR" --strip-components=1
+(cd "$INSTALL_DIR" && npm install --omit=dev)
 ```
-
-On Linux:
 
 ```bash
-sha256sum -c SHA256SUMS
+node "$INSTALL_DIR/mcp/server.mjs" --version
 ```
 
-Install the local tarball:
+Use the `node` paths for auth and doctor:
 
 ```bash
-npm install -g ./slack-codemode-mcp-1.0.0.tgz
-slack-codemode-mcp --version
+node "$INSTALL_DIR/scripts/auth.mjs"
+node "$INSTALL_DIR/scripts/check.mjs"
 ```
+
+Use this form when you cannot or do not want a global npm install.
 
 ## Install celld
 
@@ -138,10 +154,18 @@ export SLACK_CODEMODE_CELLD_BIN="$HOME/.local/bin/celld"
 3. Add the redirect URL `http://localhost:33417/callback`.
 4. Add the user token scopes.
 
-Print the scope list:
+Print the scope list.
+
+Global install:
 
 ```bash
 slack-codemode-auth --scopes
+```
+
+Local install:
+
+```bash
+node "$INSTALL_DIR/scripts/auth.mjs" --scopes
 ```
 
 Add those scopes under **User Token Scopes**, then install or reinstall the app.
@@ -162,12 +186,20 @@ printf 'SLACK_CLIENT_ID=%s\n' 'your-client-id' > "$HOME/.config/slack-codemode/.
 chmod 600 "$HOME/.config/slack-codemode/.env"
 ```
 
-When running from a source checkout, a `.env` in the repository root is used instead. The environment variable wins over the file.
+The environment variable wins. A `.env` in the package root is used for a source or local install; otherwise `~/.config/slack-codemode/.env` is used.
 
 ## Authenticate
 
+Global install:
+
 ```bash
 slack-codemode-auth
+```
+
+Local install:
+
+```bash
+node "$INSTALL_DIR/scripts/auth.mjs"
 ```
 
 A browser opens. Approve the app and return to the terminal.
@@ -178,6 +210,8 @@ Useful flags:
 slack-codemode-auth --dry-run   # print the authorize URL and exit
 slack-codemode-auth --no-open   # print the URL without opening a browser
 ```
+
+For the local install, pass the same flags to `scripts/auth.mjs`.
 
 Use a different callback port:
 
@@ -195,8 +229,16 @@ It is written with mode 0600. Rotating tokens refresh automatically.
 
 ## Verify
 
+Global install:
+
 ```bash
 slack-codemode-doctor
+```
+
+Local install:
+
+```bash
+node "$INSTALL_DIR/scripts/check.mjs"
 ```
 
 Every line should be `✓`.
@@ -205,7 +247,7 @@ Every line should be `✓`.
 
 ## Register the server
 
-Resolve the installed command:
+Global install, resolve the command:
 
 ```bash
 command -v slack-codemode-mcp
@@ -213,22 +255,52 @@ command -v slack-codemode-mcp
 
 Use that path in your MCP client.
 
+Local install, use:
+
+```text
+node /absolute/path/to/slack-codemode-mcp/mcp/server.mjs
+```
+
 ### Claude Code
+
+Global:
 
 ```bash
 claude mcp add --scope user slack-codemode-mcp -- "$(command -v slack-codemode-mcp)"
 ```
 
+Local:
+
+```bash
+claude mcp add --scope user slack-codemode-mcp -- node "$INSTALL_DIR/mcp/server.mjs"
+```
+
 ### Codex
+
+Global:
 
 ```bash
 codex mcp add slack-codemode-mcp -- "$(command -v slack-codemode-mcp)"
 ```
 
+Local:
+
+```bash
+codex mcp add slack-codemode-mcp -- node "$INSTALL_DIR/mcp/server.mjs"
+```
+
 ### OpenCode
+
+Global:
 
 ```bash
 opencode mcp add slack-codemode-mcp --global -- "$(command -v slack-codemode-mcp)"
+```
+
+Local:
+
+```bash
+opencode mcp add slack-codemode-mcp --global -- node "$INSTALL_DIR/mcp/server.mjs"
 ```
 
 ### Zed
@@ -258,32 +330,55 @@ Expect your user and workspace.
 
 ## Upgrade
 
+Download the new tarball and checksums, then verify them the same way.
+
+Global install:
+
 ```bash
-npm install -g slack-codemode-mcp@latest
+VERSION=1.0.1
+BASE="https://github.com/mhmdsami/slack-codemode-mcp/releases/download/v$VERSION"
+curl -LO "$BASE/slack-codemode-mcp-$VERSION.tgz"
+curl -LO "$BASE/SHA256SUMS"
+shasum -a 256 -c SHA256SUMS
+npm install -g "./slack-codemode-mcp-$VERSION.tgz"
 slack-codemode-mcp --version
 slack-codemode-doctor
 ```
 
-Then restart the MCP client so it loads the new server.
-
-To stay on a specific version:
+Local install:
 
 ```bash
-npm install -g slack-codemode-mcp@1.0.0
+VERSION=1.0.1
+BASE="https://github.com/mhmdsami/slack-codemode-mcp/releases/download/v$VERSION"
+curl -LO "$BASE/slack-codemode-mcp-$VERSION.tgz"
+curl -LO "$BASE/SHA256SUMS"
+shasum -a 256 -c SHA256SUMS
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+tar -xzf "slack-codemode-mcp-$VERSION.tgz" -C "$INSTALL_DIR" --strip-components=1
+(cd "$INSTALL_DIR" && npm install --omit=dev)
+node "$INSTALL_DIR/mcp/server.mjs" --version
+node "$INSTALL_DIR/scripts/check.mjs"
 ```
+
+Use `sha256sum -c` instead of `shasum` on Linux.
+
+Restart the MCP client so it loads the new server.
 
 Your token and config live in `~/.config/slack-codemode` and survive upgrades.
 
-If you installed from a tarball, install the newer tarball the same way:
-
-```bash
-npm install -g ./slack-codemode-mcp-1.0.1.tgz
-```
-
 ## Uninstall
+
+Global install:
 
 ```bash
 npm uninstall -g slack-codemode-mcp
+```
+
+Local install:
+
+```bash
+rm -rf "$HOME/tools/slack-codemode-mcp"
 ```
 
 The token is not removed. To delete it:
@@ -300,9 +395,9 @@ celld is separate. Remove `~/.local/bin/celld` if no other tool uses it.
 
 - [Troubleshooting](docs/troubleshooting.md)
 - `celld was not found`: install celld or set `SLACK_CODEMODE_CELLD_BIN`.
-- `missing_scope`: add the scope, then re-run `slack-codemode-auth`.
+- `missing_scope`: add the scope, then re-run the auth command.
 - The server is missing in Claude: add it with `--scope user` and restart the session.
 
 ## Distribution status
 
-The server is distributed on npm and GitHub Releases. Docker images and standalone bundles are not available yet.
+GitHub Releases is the only distribution channel. There is no npm registry package. Docker images and standalone bundles are not available yet.
